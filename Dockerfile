@@ -33,7 +33,7 @@ ENV DATABASE_URL="file:/app/prisma/data/prod.sqlite"
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD wget -qO- http://localhost:3000/robots.txt | grep -q "Disallow"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD wget -q --spider http://127.0.0.1:3000/health || exit 1
 
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]
+CMD ["sh", "-c", "npx prisma migrate deploy && exec node server.mjs"]

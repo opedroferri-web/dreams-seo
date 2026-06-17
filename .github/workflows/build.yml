@@ -36,8 +36,9 @@ jobs:
         run: |
           node server.mjs &
           SERVER_PID=$!
-          sleep 2
+          sleep 3
           curl -sf http://localhost:3000/robots.txt | grep -q "Disallow"
+          curl -sf http://localhost:3000/health | grep -q '"ok":true'
           kill "$SERVER_PID" || true
 
   trigger-easypanel:
