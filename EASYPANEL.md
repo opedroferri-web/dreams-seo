@@ -207,6 +207,50 @@ git push
 
 ## Solução de problemas
 
+### Deploy parou após tornar o repo privado (IMPORTANTE)
+
+**Sintoma:** pushes no GitHub não disparam build no Easypanel; app continua na versão antiga (ex.: `/robots.txt` 404).
+
+**Causa:** quando o repo vira **privado**, o Easypanel perde acesso para clonar e o webhook de auto-deploy para de funcionar. **Não é bug no código** — o GitHub Actions `Build` pode passar enquanto o Easypanel fica parado.
+
+**Correção (faça nesta ordem):**
+
+#### 1. Token GitHub no Easypanel (obrigatório para repo privado)
+
+1. GitHub → **Settings** → **Developer settings** → **Personal access tokens**
+2. Crie token **Classic** com scopes:
+   - `repo` (acesso a repos privados)
+   - `admin:repo_hook` (auto-deploy via webhook)
+3. Easypanel → **Settings** → **GitHub** → cole o token → salve
+
+> Docs: https://easypanel.io/docs/code-sources/github
+
+#### 2. Reconfigurar o serviço
+
+1. Serviço `dreams-seo` → aba **Source** / **Git**
+2. Confirme: `opedroferri-web/dreams-seo`, branch `main`
+3. Ative **Auto Deploy** (se disponível)
+4. Clique **Deploy** manualmente agora
+
+#### 3. Webhook GitHub → Easypanel (recomendado)
+
+1. Easypanel → serviço `dreams-seo` → copie a **Deploy Webhook URL**
+2. GitHub → repo `dreams-seo` → **Settings** → **Secrets and variables** → **Actions**
+3. New secret: `EASYPANEL_DEPLOY_WEBHOOK` = URL copiada
+4. A cada push em `main`, o workflow dispara deploy no Easypanel
+
+#### 4. Confirmar que atualizou
+
+Após deploy, teste:
+```bash
+curl -s https://seo.dreamsnutrition.com.br/robots.txt
+```
+Deve retornar `Disallow: /` (não 404).
+
+**Último commit no GitHub:** https://github.com/opedroferri-web/dreams-seo/commits/main
+
+---
+
 ### "Conexão recusada"
 - Serviço parado no Easypanel → **Start**
 - Porta errada → confirme `3000`

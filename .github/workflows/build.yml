@@ -31,3 +31,19 @@ jobs:
 
       - name: Verify public files
         run: test -f public/robots.txt && test -f public/sitemap.xml
+
+  trigger-easypanel:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar deploy no Easypanel
+        env:
+          WEBHOOK: ${{ secrets.EASYPANEL_DEPLOY_WEBHOOK }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::Secret EASYPANEL_DEPLOY_WEBHOOK não configurado. Configure em GitHub → Settings → Secrets."
+            exit 0
+          fi
+          curl -sf -X POST "$WEBHOOK"
+          echo "Deploy Easypanel disparado."
