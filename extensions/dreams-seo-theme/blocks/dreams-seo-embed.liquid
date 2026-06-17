@@ -115,66 +115,86 @@
   </script>
 {% endif %}
 
+{% comment %} Lazy load e WebP não afetam carrinho nem checkout {% endcomment %}
+{% unless template.name == 'cart' or template.name == 'checkout' %}
+
 {% if ds_lazy %}
   <script defer>
     document.addEventListener('DOMContentLoaded', function() {
-      var margin = {% if cfg != blank and cfg.lazy_load_margin != nil %}{{ cfg.lazy_load_margin }}{% else %}900{% endif %};
+      var imgMargin = {% if cfg != blank and cfg.lazy_load_margin != nil %}{{ cfg.lazy_load_margin }}{% else %}900{% endif %};
+      var videoMargin = Math.max(imgMargin, 1500);
       var viewportH = window.innerHeight || 800;
-      var foldLimit = viewportH * 1.15;
+      var foldLimit = viewportH * 1.2;
+
+      function playVideo(el) {
+        el.preload = 'auto';
+        if (typeof el.load === 'function') el.load();
+        if (el.hasAttribute('autoplay')) {
+          var p = el.play();
+          if (p && typeof p.catch === 'function') p.catch(function() {});
+        }
+      }
 
       function loadMedia(el) {
         if (el.dataset.dreamsLoaded) return;
         el.dataset.dreamsLoaded = '1';
         if (el.dataset.src) {
           if (el.tagName === 'IMG') el.src = el.dataset.src;
-          else if (el.tagName === 'VIDEO') { el.src = el.dataset.src; el.load(); }
+          else if (el.tagName === 'VIDEO') { el.src = el.dataset.src; }
           else if (el.tagName === 'IFRAME') el.src = el.dataset.src;
         }
-        if (el.tagName === 'VIDEO' && !el.src) el.preload = 'auto';
-        if (el.tagName === 'VIDEO') {
-          el.preload = el.preload || 'auto';
-          if (typeof el.load === 'function') el.load();
-        }
+        if (el.tagName === 'VIDEO') playVideo(el);
         if (el.tagName === 'IMG') { el.loading = 'eager'; el.decoding = 'async'; }
       }
 
-      var belowFold = [];
+      var belowFoldImgs = [];
+      var belowFoldVideos = [];
+
       document.querySelectorAll('img, video, iframe').forEach(function(el) {
         var rect = el.getBoundingClientRect();
-        var isAboveFold = rect.top < foldLimit;
-        if (isAboveFold) {
+        var aboveFold = rect.top < foldLimit;
+        var isAutoplay = el.tagName === 'VIDEO' && el.hasAttribute('autoplay');
+
+        if (aboveFold || isAutoplay) {
           if (el.tagName === 'IMG') {
             el.loading = 'eager';
             if (el.fetchPriority !== undefined) el.fetchPriority = 'high';
           }
-          if (el.tagName === 'VIDEO') el.preload = 'metadata';
+          if (el.tagName === 'VIDEO') playVideo(el);
         } else {
           if (el.tagName === 'IMG') el.loading = 'lazy';
           el.decoding = 'async';
-          belowFold.push(el);
+          if (el.tagName === 'VIDEO') {
+            belowFoldVideos.push(el);
+          } else {
+            belowFoldImgs.push(el);
+          }
         }
       });
 
-      if ('IntersectionObserver' in window && belowFold.length) {
-        var observer = new IntersectionObserver(function(entries) {
-          entries.forEach(function(entry) {
-            if (entry.isIntersecting) {
-              loadMedia(entry.target);
-              observer.unobserve(entry.target);
-            }
-          });
-        }, { rootMargin: margin + 'px 0px', threshold: 0.01 });
-        belowFold.forEach(function(el) { observer.observe(el); });
+      if ('IntersectionObserver' in window) {
+        if (belowFoldImgs.length) {
+          var imgObserver = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+              if (entry.isIntersecting) { loadMedia(entry.target); imgObserver.unobserve(entry.target); }
+            });
+          }, { rootMargin: imgMargin + 'px 0px', threshold: 0.01 });
+          belowFoldImgs.forEach(function(el) { imgObserver.observe(el); });
+        }
+        if (belowFoldVideos.length) {
+          var videoObserver = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+              if (entry.isIntersecting) { loadMedia(entry.target); videoObserver.unobserve(entry.target); }
+            });
+          }, { rootMargin: videoMargin + 'px 0px', threshold: 0.01 });
+          belowFoldVideos.forEach(function(el) { videoObserver.observe(el); });
+        }
       }
 
-      setTimeout(function() {
-        belowFold.forEach(function(el) { loadMedia(el); });
-      }, 2000);
-
+      var all = belowFoldImgs.concat(belowFoldVideos);
+      setTimeout(function() { all.forEach(function(el) { loadMedia(el); }); }, 1500);
       if ('requestIdleCallback' in window) {
-        requestIdleCallback(function() {
-          belowFold.forEach(function(el) { loadMedia(el); });
-        }, { timeout: 3500 });
+        requestIdleCallback(function() { all.forEach(function(el) { loadMedia(el); }); }, { timeout: 3000 });
       }
     });
   </script>
@@ -194,19 +214,17 @@
   </script>
 {% endif %}
 
+{% endunless %}
+
 {% if ds_delay and ds_trigger != 'disabled' %}
   <script defer>
     (function() {
       var triggered = false;
-      var patterns = [
-        'google-analytics.com', 'googletagmanager.com', 'connect.facebook.net',
-        'hotjar.com', 'clarity.ms', 'analytics.tiktok.com', 'pinimg.com'
-      ];
       var trigger = {{ ds_trigger | json }};
       function loadDelayedScripts() {
         if (triggered) return;
         triggered = true;
-        document.querySelectorAll('script[type=\"text/dreams-delay\"]').forEach(function(s) {
+        document.querySelectorAll('script[type="text/dreams-delay"]').forEach(function(s) {
           var n = document.createElement('script');
           n.src = s.getAttribute('data-src') || '';
           n.async = true;
@@ -242,9 +260,8 @@
         if (!item.enabled || item.placement === 'head') return;
         var container = document.createElement('div');
         container.innerHTML = item.content;
-        var nodes = container.childNodes;
-        for (var i = 0; i < nodes.length; i++) {
-          var node = nodes[i];
+        var nodes = Array.from(container.childNodes);
+        nodes.forEach(function(node) {
           if (node.nodeName === 'SCRIPT') {
             var s = document.createElement('script');
             if (node.src) s.src = node.src;
@@ -263,7 +280,7 @@
               document.body.appendChild(node);
             }
           }
-        }
+        });
       });
     });
   </script>

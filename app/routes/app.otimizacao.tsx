@@ -15,7 +15,6 @@ import {
   InlineStack,
   Badge,
   ProgressBar,
-  Divider,
   Box,
   Icon,
   Tabs,
@@ -26,6 +25,7 @@ import {
   Modal,
   FormLayout,
   TextField,
+  EmptyState,
 } from "@shopify/polaris";
 import { CheckCircleIcon, ClockIcon } from "@shopify/polaris-icons";
 import { authenticate } from "~/shopify.server";
@@ -46,7 +46,7 @@ import {
   detectOptimizationLevel,
   type OptimizationSettings,
 } from "~/lib/optimization-presets";
-import { DELAY_JS_TARGETS, PIXEL_TEMPLATES, type PixelTemplateKey } from "~/lib/constants";
+import { DELAY_JS_TARGETS } from "~/lib/constants";
 import { GET_SHOP } from "~/graphql/queries.server";
 import { adminGraphql } from "~/lib/graphql.server";
 import prisma from "~/db.server";
@@ -218,24 +218,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const id = formData.get("id") as string;
       await prisma.managedScript.delete({ where: { id } });
       return scriptActionResponse(admin, shop, "Script removido.");
-    }
-
-    if (intent === "add_pixel") {
-      const templateKey = formData.get("template") as PixelTemplateKey;
-      const template = PIXEL_TEMPLATES[templateKey];
-      if (template) {
-        await prisma.managedScript.create({
-          data: {
-            shop,
-            name: template.name,
-            scriptType: template.type,
-            placement: template.placement,
-            content: template.content,
-            displayRule: "all",
-          },
-        });
-      }
-      return scriptActionResponse(admin, shop, `${template?.name ?? "Pixel"} adicionado.`);
     }
 
     const settings = await saveOptimizationSettings(shop, parseSettings(formData), admin);
@@ -674,21 +656,15 @@ export default function Otimizacao() {
             <Box paddingBlockStart="400">
               <BlockStack gap="400">
                 <InlineStack align="space-between" blockAlign="center">
-                  <Text as="h3" variant="headingMd">Scripts e pixels</Text>
+                  <BlockStack gap="100">
+                    <Text as="h3" variant="headingMd">Scripts injetados na loja</Text>
+                    <Text as="p" tone="subdued" variant="bodySm">
+                      Cole qualquer HTML, JS ou tag de rastreamento — entram direto no &lt;head&gt; ou body da vitrine.
+                    </Text>
+                  </BlockStack>
                   <Button variant="primary" onClick={() => setScriptModalOpen(true)}>
                     + Novo script
                   </Button>
-                </InlineStack>
-                <Text as="p" tone="subdued">
-                  Cole HTML, JavaScript ou tags de rastreamento. Scripts no header entram no &lt;head&gt; da loja.
-                </Text>
-                <InlineStack gap="200" wrap>
-                  {(Object.keys(PIXEL_TEMPLATES) as PixelTemplateKey[]).map((key) => (
-                    <Button key={key} size="slim"
-                      onClick={() => fetcher.submit({ intent: "add_pixel", template: key }, { method: "POST" })}>
-                      + {PIXEL_TEMPLATES[key].name}
-                    </Button>
-                  ))}
                 </InlineStack>
                 <Card>
                   {scriptRows.length > 0 ? (
@@ -698,7 +674,13 @@ export default function Otimizacao() {
                       rows={scriptRows}
                     />
                   ) : (
-                    <Text as="p" tone="subdued">Nenhum script ainda. Clique em &quot;Novo script&quot; ou adicione um pixel acima.</Text>
+                    <EmptyState
+                      heading="Nenhum script adicionado"
+                      image=""
+                      action={{ content: "+ Novo script", onAction: () => setScriptModalOpen(true) }}
+                    >
+                      <p>Cole aqui qualquer tag de rastreamento, pixel ou script customizado. Ele será injetado automaticamente na vitrine.</p>
+                    </EmptyState>
                   )}
                 </Card>
               </BlockStack>
@@ -707,8 +689,8 @@ export default function Otimizacao() {
         </Tabs>
 
         <Banner tone="info">
-          Ative o app embed <strong>Dreams SEO</strong> em Loja online → Temas → Personalizar → App embeds.
-          As configs do app sincronizam automaticamente com a vitrine.
+          <strong>Como ativar na loja:</strong> Loja online → Temas → Personalizar → App embeds → ative <strong>Dreams SEO</strong> → Salvar.
+          As configurações sincronizam automaticamente com a vitrine.
         </Banner>
       </BlockStack>
 

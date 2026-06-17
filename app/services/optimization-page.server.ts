@@ -39,7 +39,7 @@ function normalizeSettings(
   data: Partial<OptimizationSettings>,
   current?: ShopSettings | null,
 ): OptimizationSettings {
-  const base = current ? settingsToOptimization(current) : OPTIMIZATION_PRESETS[2];
+  const base = current ? settingsToOptimization(current) : OPTIMIZATION_PRESETS[1];
   const merged = { ...base, ...data };
 
   if (merged.delayJsTrigger === "disabled") {
@@ -71,7 +71,7 @@ export async function saveOptimizationSettings(
     },
     create: {
       shop,
-      ...OPTIMIZATION_PRESETS[2],
+      ...OPTIMIZATION_PRESETS[1],
       ...normalized,
       schemaInjection: data.schemaInjection ?? true,
     },
@@ -112,7 +112,7 @@ export async function runStoreOptimization(
   shop: string,
   admin?: AdminApiContext["admin"],
 ) {
-  const settings = await applyOptimizationLevel(shop, 3, admin);
+  const settings = await applyOptimizationLevel(shop, 1, admin);
 
   await prisma.optimizationLog.create({
     data: {
