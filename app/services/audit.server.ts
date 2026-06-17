@@ -5,7 +5,6 @@ import {
   GET_PAGES_SEO,
   GET_BLOGS_SEO,
   GET_FILES,
-  GET_SCRIPT_TAGS,
   GET_THEME,
   GET_THEME_ASSETS,
   GET_MENUS,
@@ -57,18 +56,20 @@ async function fetchAllProducts(admin: AdminApiContext["admin"]) {
   let hasNext = true;
 
   while (hasNext) {
-    const response = await admin.graphql(GET_PRODUCTS_SEO, {
-      variables: { first: 50, after: cursor },
-    });
-    const json = await response.json();
-    const data = json.data?.products;
-    if (!data) break;
+    const { data, errors } = await adminGraphql<{
+      products?: {
+        edges: Array<{ node: Record<string, unknown> }>;
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    }>(admin, GET_PRODUCTS_SEO, { first: 50, after: cursor });
 
-    for (const edge of data.edges) {
+    if (errors.length > 0 || !data?.products) break;
+
+    for (const edge of data.products.edges) {
       products.push(edge.node);
     }
-    hasNext = data.pageInfo.hasNextPage;
-    cursor = data.pageInfo.endCursor;
+    hasNext = data.products.pageInfo.hasNextPage;
+    cursor = data.products.pageInfo.endCursor;
     if (products.length >= 500) break;
   }
 
@@ -81,18 +82,20 @@ async function fetchAllCollections(admin: AdminApiContext["admin"]) {
   let hasNext = true;
 
   while (hasNext) {
-    const response = await admin.graphql(GET_COLLECTIONS_SEO, {
-      variables: { first: 50, after: cursor },
-    });
-    const json = await response.json();
-    const data = json.data?.collections;
-    if (!data) break;
+    const { data, errors } = await adminGraphql<{
+      collections?: {
+        edges: Array<{ node: Record<string, unknown> }>;
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    }>(admin, GET_COLLECTIONS_SEO, { first: 50, after: cursor });
 
-    for (const edge of data.edges) {
+    if (errors.length > 0 || !data?.collections) break;
+
+    for (const edge of data.collections.edges) {
       collections.push(edge.node);
     }
-    hasNext = data.pageInfo.hasNextPage;
-    cursor = data.pageInfo.endCursor;
+    hasNext = data.collections.pageInfo.hasNextPage;
+    cursor = data.collections.pageInfo.endCursor;
   }
 
   return collections;
@@ -102,14 +105,13 @@ export async function runFullAudit(
   shop: string,
   admin: AdminApiContext["admin"],
 ) {
-  const [products, collections, pagesResult, blogsResult, filesResult, scriptsResult] =
+  const [products, collections, pagesResult, blogsResult, filesResult] =
     await Promise.all([
       fetchAllProducts(admin),
       fetchAllCollections(admin),
       adminGraphql(admin, GET_PAGES_SEO, { first: 100 }),
       adminGraphql(admin, GET_BLOGS_SEO, { first: 10 }),
       adminGraphql(admin, GET_FILES, { first: 100 }),
-      adminGraphql(admin, GET_SCRIPT_TAGS).catch(() => ({ data: null, errors: [] })),
     ]);
 
   const pages =
@@ -121,7 +123,7 @@ export async function runFullAudit(
   );
   const files =
     filesResult.data?.files?.edges?.map((e: { node: unknown }) => e.node) || [];
-  const scriptTags = scriptsResult.data?.scriptTags?.edges?.length || 0;
+  const scriptTags = 0;
 
   const allIssues: AuditIssueInput[] = [];
 
