@@ -1,0 +1,33 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build app
+        run: npm run build
+
+      - name: Verify robots.txt route
+        run: node -e "const fs=require('fs'); const s=fs.readFileSync('build/server/index.js','utf8'); if(!s.includes('robots.txt')) process.exit(1); console.log('robots.txt route OK');"
+
+      - name: Verify public files
+        run: test -f public/robots.txt && test -f public/sitemap.xml

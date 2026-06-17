@@ -1,0 +1,5 @@
+# Dreams SEO Pro — backend do app Shopify (não indexar)
+User-agent: *
+Disallow: /
+
+Sitemap: https://seo.dreamsnutrition.com.br/sitemap.xml
