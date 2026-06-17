@@ -21,6 +21,7 @@ WORKDIR /app
 
 COPY --from=build /app/build ./build
 COPY --from=build /app/public ./public
+COPY --from=build /app/server.mjs ./server.mjs
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/prisma ./prisma
@@ -33,6 +34,6 @@ ENV DATABASE_URL="file:/app/prisma/data/prod.sqlite"
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD wget -qO- http://localhost:3000/ || exit 1
+  CMD wget -qO- http://localhost:3000/robots.txt | grep -q "Disallow"
 
 CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]

@@ -30,7 +30,14 @@ jobs:
         run: node -e "const fs=require('fs'); const s=fs.readFileSync('build/server/index.js','utf8'); if(!s.includes('robots.txt')) process.exit(1); console.log('robots.txt route OK');"
 
       - name: Verify public files
-        run: test -f public/robots.txt && test -f public/sitemap.xml
+        run: test -f public/robots.txt && test -f public/sitemap.xml && test -f server.mjs
+
+      - name: Verify server.mjs starts
+        run: |
+          node server.mjs &
+          sleep 3
+          curl -sf http://localhost:3000/robots.txt | grep -q "Disallow"
+          kill %1 || true
 
   trigger-easypanel:
     needs: build
