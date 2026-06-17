@@ -35,9 +35,10 @@ jobs:
       - name: Verify server.mjs starts
         run: |
           node server.mjs &
-          sleep 3
+          SERVER_PID=$!
+          sleep 2
           curl -sf http://localhost:3000/robots.txt | grep -q "Disallow"
-          kill %1 || true
+          kill "$SERVER_PID" || true
 
   trigger-easypanel:
     needs: build
