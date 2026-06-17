@@ -1,16 +1,16 @@
 var _a;
 import { jsx, jsxs } from "react/jsx-runtime";
 import { PassThrough } from "node:stream";
-import { createReadableStreamFromReadable, redirect } from "@remix-run/node";
-import { RemixServer, Meta, Links, Outlet, ScrollRestoration, Scripts, useRouteError, useLoaderData, useFetcher, Link } from "@remix-run/react";
+import { createReadableStreamFromReadable, json, redirect } from "@remix-run/node";
+import { RemixServer, Meta, Links, Outlet, ScrollRestoration, Scripts, useRouteError, useLoaderData, useFetcher, useActionData, Form, Link as Link$1 } from "@remix-run/react";
 import * as isbotModule from "isbot";
 import { renderToPipeableStream } from "react-dom/server";
-import { boundary, shopifyApp, AppDistribution, ApiVersion } from "@shopify/shopify-app-remix/server";
+import { boundary, shopifyApp, AppDistribution, ApiVersion, LoginErrorType } from "@shopify/shopify-app-remix/server";
 import "@shopify/shopify-app-remix/adapters/node";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import { PrismaClient } from "@prisma/client";
-import { Card, BlockStack, Text, Badge, DataTable, InlineStack, ProgressBar, Page, Grid, Button, Banner, List, Modal, FormLayout, TextField, Select, ButtonGroup, Layout, Checkbox, Tabs } from "@shopify/polaris";
 import { useState } from "react";
+import { Badge, InlineStack, Button, Page, BlockStack, Banner, Card, Text, Box, List, Tabs, Layout, ProgressBar, Link, Grid, DataTable, EmptyState, Modal, FormLayout, TextField, Select, ButtonGroup } from "@shopify/polaris";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { NavMenu } from "@shopify/app-bridge-react";
 const ABORT_DELAY = 5e3;
@@ -170,6 +170,10 @@ if (process.env.NODE_ENV !== "production") {
   }
 }
 const prisma = global.prismaGlobal ?? new PrismaClient();
+const db_server = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  default: prisma
+}, Symbol.toStringTag, { value: "Module" }));
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
@@ -192,7 +196,7 @@ shopify.unauthenticated;
 const login = shopify.login;
 shopify.registerWebhooks;
 shopify.sessionStorage;
-const action$a = async ({ request }) => {
+const action$5 = async ({ request }) => {
   const { session } = await authenticate.webhook(request);
   if (session) {
     await prisma.session.update({
@@ -204,9 +208,9 @@ const action$a = async ({ request }) => {
 };
 const route1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  action: action$a
+  action: action$5
 }, Symbol.toStringTag, { value: "Module" }));
-const action$9 = async ({ request }) => {
+const action$4 = async ({ request }) => {
   const { shop, session, topic } = await authenticate.webhook(request);
   switch (topic) {
     case "APP_UNINSTALLED":
@@ -225,50 +229,91 @@ const action$9 = async ({ request }) => {
 };
 const route2 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  action: action$9
+  action: action$4
 }, Symbol.toStringTag, { value: "Module" }));
-const severityTone = (severity) => {
-  switch (severity) {
-    case "critical":
-    case "high":
-      return "critical";
-    case "medium":
-      return "warning";
-    default:
-      return "info";
-  }
-};
-function IssuesTable({ issues, title = "Problemas Detectados" }) {
-  if (issues.length === 0) {
-    return /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "200", children: [
-      /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: title }),
-      /* @__PURE__ */ jsx(Text, { as: "p", tone: "success", children: "Nenhum problema encontrado." })
-    ] }) });
-  }
-  const rows = issues.map((issue) => [
-    issue.resourceTitle || issue.resourceType,
-    issue.issueType.replace(/_/g, " "),
-    /* @__PURE__ */ jsx(Badge, { tone: severityTone(issue.severity), children: issue.severity }, issue.id),
-    issue.message,
-    issue.suggestion || "—"
-  ]);
-  return /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
-    /* @__PURE__ */ jsxs(Text, { as: "h3", variant: "headingMd", children: [
-      title,
-      " (",
-      issues.length,
-      ")"
-    ] }),
-    /* @__PURE__ */ jsx(
-      DataTable,
-      {
-        columnContentTypes: ["text", "text", "text", "text", "text"],
-        headings: ["Recurso", "Tipo", "Severidade", "Problema", "Sugestão"],
-        rows
+const UPDATE_PRODUCT_SEO = `#graphql
+  mutation UpdateProductSeo($input: ProductInput!) {
+    productUpdate(input: $input) {
+      product {
+        id
+        title
+        handle
+        seo {
+          title
+          description
+        }
       }
-    )
-  ] }) });
-}
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+const UPDATE_COLLECTION_SEO = `#graphql
+  mutation UpdateCollectionSeo($input: CollectionInput!) {
+    collectionUpdate(input: $input) {
+      collection {
+        id
+        title
+        seo {
+          title
+          description
+        }
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+const UPDATE_MEDIA_ALT = `#graphql
+  mutation UpdateMediaAlt($input: [FileUpdateInput!]!) {
+    fileUpdate(files: $input) {
+      files {
+        ... on MediaImage {
+          id
+          alt
+        }
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+const CREATE_METAFIELD = `#graphql
+  mutation CreateMetafield($metafields: [MetafieldsSetInput!]!) {
+    metafieldsSet(metafields: $metafields) {
+      metafields {
+        id
+        key
+        value
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+const GET_SHOP = `#graphql
+  query GetShop {
+    shop {
+      id
+      name
+      myshopifyDomain
+      primaryDomain {
+        url
+        host
+      }
+      currencyCode
+      description
+    }
+  }
+`;
 const GET_PRODUCTS_SEO = `#graphql
   query GetProductsSeo($first: Int!, $after: String) {
     products(first: $first, after: $after) {
@@ -356,7 +401,6 @@ const GET_PAGES_SEO = `#graphql
           title
           handle
           bodySummary
-          body
           createdAt
           updatedAt
         }
@@ -379,7 +423,7 @@ const GET_BLOGS_SEO = `#graphql
                 title
                 handle
                 summary
-                contentHtml
+                body
                 image {
                   altText
                   url
@@ -410,95 +454,651 @@ const GET_FILES = `#graphql
               width
               height
             }
-            originalSource {
-              fileSize
-            }
           }
         }
       }
     }
   }
 `;
-const GET_THEME = `#graphql
-  query GetMainTheme {
-    themes(first: 1, roles: [MAIN]) {
-      edges {
-        node {
-          id
-          name
-          role
-        }
+async function adminGraphql(admin, query, variables) {
+  var _a2;
+  try {
+    const response = await admin.graphql(query, variables ? { variables } : void 0);
+    const json2 = await response.json();
+    const errors = ((_a2 = json2.errors) == null ? void 0 : _a2.map((e) => e.message)) ?? [];
+    if (errors.length > 0) {
+      console.error("[GraphQL]", errors.join("; "));
+    }
+    return { data: json2.data ?? null, errors };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido na API GraphQL";
+    console.error("[GraphQL throw]", message);
+    return { data: null, errors: [message] };
+  }
+}
+async function syncScriptsToMetafield(admin, shop) {
+  var _a2, _b, _c;
+  try {
+    const prisma2 = (await Promise.resolve().then(() => db_server)).default;
+    const scripts = await prisma2.managedScript.findMany({
+      where: { shop },
+      orderBy: { priority: "desc" }
+    });
+    const { data, errors } = await adminGraphql(admin, GET_SHOP);
+    if (errors.length > 0) return { ok: false, error: errors.join(", ") };
+    const shopId = (_a2 = data == null ? void 0 : data.shop) == null ? void 0 : _a2.id;
+    if (!shopId) return { ok: false, error: "Loja não encontrada" };
+    const payload = scripts.map((s) => ({
+      name: s.name,
+      placement: s.placement,
+      content: s.content,
+      enabled: s.enabled,
+      type: s.scriptType
+    }));
+    const response = await admin.graphql(CREATE_METAFIELD, {
+      variables: {
+        metafields: [{
+          ownerId: shopId,
+          namespace: "dreams_seo",
+          key: "scripts",
+          type: "json",
+          value: JSON.stringify(payload)
+        }]
+      }
+    });
+    const json2 = await response.json();
+    const userErrors = ((_c = (_b = json2.data) == null ? void 0 : _b.metafieldsSet) == null ? void 0 : _c.userErrors) ?? [];
+    if (userErrors.length > 0) {
+      return { ok: false, error: userErrors.map((e) => e.message).join(", ") };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error("[metafield-sync scripts]", error);
+    return { ok: false, error: error instanceof Error ? error.message : "Erro" };
+  }
+}
+function calculateOptimizationScore(settings) {
+  const checks = [
+    settings.dnsPrefetchEnabled,
+    settings.preconnectEnabled,
+    settings.preloadEnabled,
+    settings.prefetchEnabled,
+    settings.lazyLoadEnabled,
+    settings.delayJsEnabled,
+    settings.fontOptimization,
+    settings.resourceHintsLevel >= 2,
+    settings.webpEnabled
+  ];
+  const active = checks.filter(Boolean).length;
+  return Math.round(active / checks.length * 100);
+}
+function guessFormat(url) {
+  const match = url.match(/\.(webp|png|jpe?g|gif|svg)(\?|$)/i);
+  return match ? match[1].toLowerCase() : "desconhecido";
+}
+function emptyPerformanceReport(shopUrl, optimization, error) {
+  const optScore = calculateOptimizationScore(optimization);
+  return {
+    mobileScore: Math.round(optScore * 0.7),
+    desktopScore: Math.min(100, Math.round(optScore * 0.7) + 7),
+    metrics: {
+      lcpMs: 0,
+      fcpMs: 0,
+      tbtMs: 0,
+      pageWeightKb: 0,
+      imageCount: 0,
+      heavyImages: 0,
+      scriptEstimate: 0
+    },
+    heavyImages: [],
+    recommendations: [
+      "Análise parcial — configure o app e clique em Otimizar loja agora.",
+      ...error ? [`Detalhe: ${error.slice(0, 120)}`] : []
+    ],
+    storefrontUrl: shopUrl.startsWith("http") ? shopUrl : `https://${shopUrl}`,
+    analysisError: error
+  };
+}
+async function analyzeStorePerformance(shop, admin, optimization, shopUrl) {
+  var _a2, _b, _c, _d, _e, _f;
+  try {
+    const [filesResult, managedScripts] = await Promise.all([
+      adminGraphql(admin, GET_FILES, { first: 100 }),
+      prisma.managedScript.count({ where: { shop, enabled: true } })
+    ]);
+    if (filesResult.errors.length > 0 && !filesResult.data) {
+      return emptyPerformanceReport(shopUrl, optimization, filesResult.errors.join("; "));
+    }
+    const heavyImages = [];
+    let estimatedImageKb = 0;
+    for (const edge of ((_b = (_a2 = filesResult.data) == null ? void 0 : _a2.files) == null ? void 0 : _b.edges) ?? []) {
+      const node = edge.node;
+      if (!node.id || !((_c = node.image) == null ? void 0 : _c.url)) continue;
+      const url = node.image.url;
+      const w = node.image.width ?? 800;
+      const h = node.image.height ?? 800;
+      const estimatedBytes = Math.round(w * h / 12);
+      estimatedImageKb += Math.round(estimatedBytes / 1024);
+      const format = guessFormat(url);
+      const sizeKb = Math.round(estimatedBytes / 1024);
+      if (sizeKb >= 120 || format === "png") {
+        heavyImages.push({
+          id: node.id,
+          url,
+          alt: node.alt ?? null,
+          sizeKb,
+          format,
+          needsWebp: format !== "webp" && format !== "svg"
+        });
       }
     }
+    heavyImages.sort((a, b) => b.sizeKb - a.sizeKb);
+    const pageWeightKb = estimatedImageKb + 200;
+    const scriptEstimate = managedScripts + 2;
+    const optScore = calculateOptimizationScore(optimization);
+    const mobileScore = Math.max(
+      25,
+      Math.min(
+        98,
+        Math.round(
+          optScore * 0.5 + (pageWeightKb < 900 ? 22 : pageWeightKb < 1800 ? 12 : 4) + (heavyImages.length === 0 ? 12 : heavyImages.length < 8 ? 6 : 0) - scriptEstimate * 2
+        )
+      )
+    );
+    const recommendations = [];
+    if (heavyImages.length > 0) {
+      recommendations.push(
+        `${heavyImages.length} imagens podem ser otimizadas. Ative WebP e lazy load.`
+      );
+    }
+    if (!optimization.lazyLoadEnabled) {
+      recommendations.push("Ative lazy load para melhorar LCP.");
+    }
+    if (!optimization.preloadEnabled) {
+      recommendations.push("Ative preload da imagem hero.");
+    }
+    if (!optimization.delayJsEnabled) {
+      recommendations.push("Adie JavaScript de analytics (Delay JS).");
+    }
+    if (optimization.resourceHintsLevel < 2) ;
+    if (!optimization.webpEnabled) {
+      recommendations.push("Ative WebP automático na aba Imagens.");
+    }
+    if (recommendations.length === 0) {
+      recommendations.push("Loja bem otimizada. Valide no PageSpeed Insights.");
+    }
+    return {
+      mobileScore,
+      desktopScore: Math.min(100, mobileScore + 7),
+      metrics: {
+        lcpMs: Math.round(1100 + pageWeightKb * 0.7 + heavyImages.length * 35),
+        fcpMs: Math.round(750 + pageWeightKb * 0.35),
+        tbtMs: scriptEstimate * 110,
+        pageWeightKb,
+        imageCount: ((_f = (_e = (_d = filesResult.data) == null ? void 0 : _d.files) == null ? void 0 : _e.edges) == null ? void 0 : _f.length) ?? 0,
+        heavyImages: heavyImages.length,
+        scriptEstimate
+      },
+      heavyImages: heavyImages.slice(0, 15),
+      recommendations,
+      storefrontUrl: shopUrl.startsWith("http") ? shopUrl : `https://${shopUrl}`
+    };
+  } catch (error) {
+    console.error("[performance-analysis]", error);
+    return emptyPerformanceReport(
+      shopUrl,
+      optimization,
+      error instanceof Error ? error.message : "Erro na análise"
+    );
   }
-`;
-const GET_THEME_ASSETS = `#graphql
-  query GetThemeAssets($themeId: ID!) {
-    theme(id: $themeId) {
-      id
-      name
-      files(first: 250) {
-        edges {
-          node {
-            filename
-            size
-            contentType
+}
+const loader$7 = async ({ request }) => {
+  var _a2, _b, _c;
+  const { admin, session } = await authenticate.admin(request);
+  const shop = session.shop;
+  const [scripts, shopData] = await Promise.all([
+    prisma.managedScript.findMany({ where: { shop }, orderBy: { priority: "desc" } }),
+    adminGraphql(admin, GET_SHOP)
+  ]);
+  const shopUrl = ((_c = (_b = (_a2 = shopData.data) == null ? void 0 : _a2.shop) == null ? void 0 : _b.primaryDomain) == null ? void 0 : _c.url) ?? `https://${shop}`;
+  let performance;
+  try {
+    performance = await analyzeStorePerformance(shop, admin, {
+      lazyLoadEnabled: true,
+      delayJsEnabled: false,
+      dnsPrefetchEnabled: true,
+      preconnectEnabled: true,
+      preloadEnabled: true,
+      prefetchEnabled: false,
+      fontOptimization: true,
+      resourceHintsLevel: 2,
+      delayJsTrigger: "scroll",
+      webpEnabled: true
+    }, shopUrl);
+  } catch {
+    performance = emptyPerformanceReport(shopUrl, {
+      lazyLoadEnabled: true,
+      delayJsEnabled: false,
+      dnsPrefetchEnabled: true,
+      preconnectEnabled: true,
+      preloadEnabled: true,
+      prefetchEnabled: false,
+      fontOptimization: true,
+      resourceHintsLevel: 2,
+      webpEnabled: true
+    });
+  }
+  return json({
+    scripts,
+    performance,
+    pagespeedUrl: `https://pagespeed.web.dev/analysis?url=${encodeURIComponent(shopUrl)}`
+  });
+};
+async function syncAndReloadScripts(admin, shop, message) {
+  await syncScriptsToMetafield(admin, shop);
+  const scripts = await prisma.managedScript.findMany({ where: { shop }, orderBy: { priority: "desc" } });
+  return json({ success: true, message, scripts });
+}
+const action$3 = async ({ request }) => {
+  var _a2, _b;
+  const { admin, session } = await authenticate.admin(request);
+  const shop = session.shop;
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+  try {
+    if (intent === "create_script") {
+      const name = (_a2 = formData.get("name")) == null ? void 0 : _a2.trim();
+      const content = (_b = formData.get("content")) == null ? void 0 : _b.trim();
+      if (!name || !content) {
+        return json({ success: false, error: "Nome e conteúdo são obrigatórios." }, { status: 400 });
+      }
+      await prisma.managedScript.create({
+        data: {
+          shop,
+          name,
+          scriptType: formData.get("scriptType") || "javascript",
+          placement: formData.get("placement") || "head",
+          content,
+          displayRule: "all"
+        }
+      });
+      return syncAndReloadScripts(admin, shop, `Script "${name}" adicionado.`);
+    }
+    if (intent === "toggle_script") {
+      const id = formData.get("id");
+      const script = await prisma.managedScript.findUnique({ where: { id } });
+      if (script) await prisma.managedScript.update({ where: { id }, data: { enabled: !script.enabled } });
+      return syncAndReloadScripts(admin, shop, "Script atualizado.");
+    }
+    if (intent === "delete_script") {
+      await prisma.managedScript.delete({ where: { id: formData.get("id") } });
+      return syncAndReloadScripts(admin, shop, "Script removido.");
+    }
+    return json({ success: false, error: "Ação desconhecida." }, { status: 400 });
+  } catch (error) {
+    console.error("[otimizacao action]", error);
+    return json({ success: false, error: error instanceof Error ? error.message : "Erro." }, { status: 500 });
+  }
+};
+const OTIMIZACOES_ATIVAS = [
+  "Preconnect e DNS prefetch para CDNs da Shopify",
+  "Preload da imagem principal do produto/coleção",
+  "Font-display: swap (fontes sem FOIT)",
+  "Schema JSON-LD em produtos e organização",
+  "Lazy load de imagens (abaixo da dobra)",
+  "Conversão automática para WebP via CDN Shopify",
+  "Vídeos com autoplay carregam imediatamente",
+  "Carrinho e checkout protegidos (sem interferência)"
+];
+function Otimizacao() {
+  var _a2, _b, _c, _d;
+  const { scripts, performance, pagespeedUrl } = useLoaderData();
+  const fetcher = useFetcher();
+  const [tab, setTab] = useState(0);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", placement: "head", scriptType: "javascript", content: "" });
+  const isLoading = fetcher.state !== "idle";
+  const activeScripts = ((_a2 = fetcher.data) == null ? void 0 : _a2.scripts) ?? scripts;
+  const mobileTone = performance.mobileScore >= 80 ? "success" : performance.mobileScore >= 50 ? "highlight" : "critical";
+  const heavyRows = performance.heavyImages.map((img) => {
+    var _a3;
+    return [
+      ((_a3 = img.url.split("/").pop()) == null ? void 0 : _a3.slice(0, 35)) ?? "—",
+      `${img.sizeKb} KB`,
+      img.format.toUpperCase(),
+      img.needsWebp ? /* @__PURE__ */ jsx(Badge, { tone: "warning", children: "Converter WebP" }) : /* @__PURE__ */ jsx(Badge, { tone: "success", children: "OK" })
+    ];
+  });
+  const placementLabel = {
+    head: "Header (<head>)",
+    body_start: "Início do body",
+    body_end: "Final do body"
+  };
+  const scriptRows = activeScripts.map((sc) => {
+    var _a3, _b2;
+    return [
+      sc.name,
+      placementLabel[sc.placement] ?? sc.placement,
+      /* @__PURE__ */ jsx(Badge, { tone: sc.enabled ? "success" : "critical", children: sc.enabled ? "Ativo" : "Inativo" }, sc.id),
+      /* @__PURE__ */ jsxs(InlineStack, { gap: "200", children: [
+        /* @__PURE__ */ jsx(
+          Button,
+          {
+            size: "slim",
+            loading: isLoading && ((_a3 = fetcher.formData) == null ? void 0 : _a3.get("id")) === sc.id && ((_b2 = fetcher.formData) == null ? void 0 : _b2.get("intent")) === "toggle_script",
+            onClick: () => fetcher.submit({ intent: "toggle_script", id: sc.id }, { method: "POST" }),
+            children: sc.enabled ? "Desativar" : "Ativar"
           }
-        }
-      }
-    }
-  }
-`;
-const GET_SCRIPT_TAGS = `#graphql
-  query GetScriptTags {
-    scriptTags(first: 50) {
-      edges {
-        node {
-          id
-          src
-          displayScope
-          createdAt
-        }
-      }
-    }
-  }
-`;
-const GET_URL_REDIRECTS = `#graphql
-  query GetUrlRedirects($first: Int!, $after: String) {
-    urlRedirects(first: $first, after: $after) {
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      edges {
-        node {
-          id
-          path
-          target
-        }
-      }
-    }
-  }
-`;
-const GET_MENUS = `#graphql
-  query GetMenus($first: Int!) {
-    menus(first: $first) {
-      edges {
-        node {
-          id
-          title
-          handle
-          items {
-            id
-            title
-            url
-            type
+        ),
+        /* @__PURE__ */ jsx(
+          Button,
+          {
+            size: "slim",
+            tone: "critical",
+            onClick: () => fetcher.submit({ intent: "delete_script", id: sc.id }, { method: "POST" }),
+            children: "Excluir"
           }
-        }
-      }
+        )
+      ] }, `a-${sc.id}`)
+    ];
+  });
+  const tabs = [
+    { id: "velocidade", content: "Velocidade", panelID: "velocidade" },
+    { id: "imagens", content: "Imagens", panelID: "imagens" },
+    { id: "scripts", content: "Scripts", panelID: "scripts" }
+  ];
+  return /* @__PURE__ */ jsxs(
+    Page,
+    {
+      title: "Otimização",
+      subtitle: "Performance automática aplicada na sua loja",
+      children: [
+        /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
+          ((_b = fetcher.data) == null ? void 0 : _b.success) && fetcher.data.message && /* @__PURE__ */ jsx(Banner, { tone: "success", onDismiss: () => {
+          }, children: fetcher.data.message }),
+          ((_c = fetcher.data) == null ? void 0 : _c.error) && /* @__PURE__ */ jsx(Banner, { tone: "critical", onDismiss: () => {
+          }, children: fetcher.data.error }),
+          /* @__PURE__ */ jsxs(Card, { children: [
+            /* @__PURE__ */ jsxs(InlineStack, { align: "space-between", blockAlign: "center", children: [
+              /* @__PURE__ */ jsxs(BlockStack, { gap: "100", children: [
+                /* @__PURE__ */ jsx(Text, { as: "h2", variant: "headingMd", children: "Otimizações ativas" }),
+                /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", variant: "bodySm", children: "Aplicadas automaticamente em toda a loja — nenhuma configuração necessária." })
+              ] }),
+              /* @__PURE__ */ jsx(Badge, { tone: "success", size: "large", children: "ON" })
+            ] }),
+            /* @__PURE__ */ jsx(Box, { paddingBlockStart: "300", children: /* @__PURE__ */ jsx(List, { type: "bullet", children: OTIMIZACOES_ATIVAS.map((o) => /* @__PURE__ */ jsx(List.Item, { children: o }, o)) }) })
+          ] }),
+          /* @__PURE__ */ jsxs(Tabs, { tabs, selected: tab, onSelect: setTab, children: [
+            tab === 0 && /* @__PURE__ */ jsx(Box, { paddingBlockStart: "400", children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
+              performance.analysisError && /* @__PURE__ */ jsxs(Banner, { tone: "warning", children: [
+                "Análise parcial: ",
+                performance.analysisError
+              ] }),
+              /* @__PURE__ */ jsxs(Layout, { children: [
+                /* @__PURE__ */ jsx(Layout.Section, { variant: "oneHalf", children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "300", children: [
+                  /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Mobile" }),
+                  /* @__PURE__ */ jsx(Text, { as: "p", variant: "heading2xl", fontWeight: "bold", children: performance.mobileScore }),
+                  /* @__PURE__ */ jsx(ProgressBar, { progress: performance.mobileScore, tone: mobileTone, size: "small" }),
+                  /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", variant: "bodySm", children: "Estimativa baseada em peso, imagens e otimizações ativas" })
+                ] }) }) }),
+                /* @__PURE__ */ jsx(Layout.Section, { variant: "oneHalf", children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "300", children: [
+                  /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Desktop" }),
+                  /* @__PURE__ */ jsx(Text, { as: "p", variant: "heading2xl", fontWeight: "bold", children: performance.desktopScore }),
+                  /* @__PURE__ */ jsx(ProgressBar, { progress: performance.desktopScore, tone: "success", size: "small" }),
+                  /* @__PURE__ */ jsx(Link, { url: pagespeedUrl, target: "_blank", children: "Abrir no PageSpeed Insights →" })
+                ] }) }) })
+              ] }),
+              /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
+                /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Core Web Vitals (estimativa)" }),
+                /* @__PURE__ */ jsx(Grid, { children: [
+                  { label: "LCP", value: `${performance.metrics.lcpMs} ms`, hint: "Largest Contentful Paint" },
+                  { label: "FCP", value: `${performance.metrics.fcpMs} ms`, hint: "First Contentful Paint" },
+                  { label: "TBT", value: `${performance.metrics.tbtMs} ms`, hint: "Total Blocking Time" },
+                  { label: "Peso", value: `${performance.metrics.pageWeightKb} KB`, hint: "Peso estimado" }
+                ].map((m) => /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsxs(BlockStack, { gap: "100", children: [
+                  /* @__PURE__ */ jsx(Text, { as: "p", variant: "bodySm", tone: "subdued", children: m.label }),
+                  /* @__PURE__ */ jsx(Text, { as: "p", variant: "headingMd", fontWeight: "bold", children: m.value }),
+                  /* @__PURE__ */ jsx(Text, { as: "p", variant: "bodySm", tone: "subdued", children: m.hint })
+                ] }) }, m.label)) })
+              ] }) }),
+              performance.recommendations.length > 0 && /* @__PURE__ */ jsxs(Card, { children: [
+                /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Recomendações" }),
+                /* @__PURE__ */ jsx(Box, { paddingBlockStart: "300", children: /* @__PURE__ */ jsx(List, { type: "bullet", children: performance.recommendations.map((r) => /* @__PURE__ */ jsx(List.Item, { children: r }, r)) }) })
+              ] })
+            ] }) }),
+            tab === 1 && /* @__PURE__ */ jsx(Box, { paddingBlockStart: "400", children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
+              /* @__PURE__ */ jsx(InlineStack, { align: "space-between", children: /* @__PURE__ */ jsxs(Text, { as: "p", tone: "subdued", children: [
+                performance.metrics.heavyImages,
+                " imagens pesadas · ",
+                performance.metrics.imageCount,
+                " total"
+              ] }) }),
+              /* @__PURE__ */ jsx(Banner, { tone: "info", children: "Imagens da Shopify são convertidas para WebP automaticamente via CDN. Imagens abaixo da dobra só carregam quando o visitante está próximo." }),
+              /* @__PURE__ */ jsx(Card, { children: heavyRows.length > 0 ? /* @__PURE__ */ jsx(
+                DataTable,
+                {
+                  columnContentTypes: ["text", "numeric", "text", "text"],
+                  headings: ["Arquivo", "Peso", "Formato", "Status"],
+                  rows: heavyRows
+                }
+              ) : /* @__PURE__ */ jsx(Text, { as: "p", tone: "success", children: "Nenhuma imagem pesada detectada. Excelente!" }) })
+            ] }) }),
+            tab === 2 && /* @__PURE__ */ jsx(Box, { paddingBlockStart: "400", children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
+              /* @__PURE__ */ jsxs(InlineStack, { align: "space-between", blockAlign: "center", children: [
+                /* @__PURE__ */ jsxs(BlockStack, { gap: "100", children: [
+                  /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Scripts injetados na loja" }),
+                  /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", variant: "bodySm", children: "Cole qualquer HTML, JS ou tag de rastreamento — entram direto no <head> ou body da vitrine." })
+                ] }),
+                /* @__PURE__ */ jsx(Button, { variant: "primary", onClick: () => setModalOpen(true), children: "+ Novo script" })
+              ] }),
+              /* @__PURE__ */ jsx(Card, { children: scriptRows.length > 0 ? /* @__PURE__ */ jsx(
+                DataTable,
+                {
+                  columnContentTypes: ["text", "text", "text", "text"],
+                  headings: ["Nome", "Posição", "Status", "Ações"],
+                  rows: scriptRows
+                }
+              ) : /* @__PURE__ */ jsx(
+                EmptyState,
+                {
+                  heading: "Nenhum script adicionado",
+                  image: "",
+                  action: { content: "+ Novo script", onAction: () => setModalOpen(true) },
+                  children: /* @__PURE__ */ jsx("p", { children: "Cole tags de rastreamento, pixels ou scripts customizados. Injetados automaticamente na vitrine." })
+                }
+              ) })
+            ] }) })
+          ] }),
+          /* @__PURE__ */ jsxs(Banner, { tone: "info", children: [
+            /* @__PURE__ */ jsx("strong", { children: "Como ativar:" }),
+            " Loja online → Temas → Personalizar → App embeds → ative ",
+            /* @__PURE__ */ jsx("strong", { children: "Dreams SEO" }),
+            " → Salvar."
+          ] })
+        ] }),
+        /* @__PURE__ */ jsx(
+          Modal,
+          {
+            open: modalOpen,
+            onClose: () => setModalOpen(false),
+            title: "Novo script",
+            primaryAction: {
+              content: "Salvar na vitrine",
+              loading: isLoading && ((_d = fetcher.formData) == null ? void 0 : _d.get("intent")) === "create_script",
+              onAction: () => {
+                fetcher.submit({ intent: "create_script", ...form }, { method: "POST" });
+                setModalOpen(false);
+                setForm({ name: "", placement: "head", scriptType: "javascript", content: "" });
+              }
+            },
+            secondaryActions: [{ content: "Cancelar", onAction: () => setModalOpen(false) }],
+            children: /* @__PURE__ */ jsx(Modal.Section, { children: /* @__PURE__ */ jsxs(FormLayout, { children: [
+              /* @__PURE__ */ jsx(
+                TextField,
+                {
+                  label: "Nome",
+                  value: form.name,
+                  onChange: (v) => setForm({ ...form, name: v }),
+                  autoComplete: "off",
+                  placeholder: "Ex: Google Tag Manager"
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                Select,
+                {
+                  label: "Posição",
+                  options: [
+                    { label: "Header (<head>)", value: "head" },
+                    { label: "Início do body", value: "body_start" },
+                    { label: "Final do body", value: "body_end" }
+                  ],
+                  value: form.placement,
+                  onChange: (v) => setForm({ ...form, placement: v })
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                Select,
+                {
+                  label: "Tipo",
+                  options: [
+                    { label: "JavaScript", value: "javascript" },
+                    { label: "HTML / Tag", value: "html" },
+                    { label: "Pixel", value: "pixel" }
+                  ],
+                  value: form.scriptType,
+                  onChange: (v) => setForm({ ...form, scriptType: v })
+                }
+              ),
+              /* @__PURE__ */ jsx(
+                TextField,
+                {
+                  label: "Conteúdo",
+                  value: form.content,
+                  onChange: (v) => setForm({ ...form, content: v }),
+                  multiline: 8,
+                  autoComplete: "off",
+                  helpText: "Cole o código completo, incluindo as tags <script>...<\/script>"
+                }
+              )
+            ] }) })
+          }
+        )
+      ]
     }
+  );
+}
+const route3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  action: action$3,
+  default: Otimizacao,
+  loader: loader$7
+}, Symbol.toStringTag, { value: "Module" }));
+function getScoreColor(score) {
+  if (score >= 80) return "success";
+  if (score >= 50) return "warning";
+  return "critical";
+}
+function getScoreLabel(score) {
+  if (score >= 90) return "Excelente";
+  if (score >= 80) return "Bom";
+  if (score >= 60) return "Regular";
+  if (score >= 40) return "Precisa melhorar";
+  return "Crítico";
+}
+function ScoreCard({ title, score, description }) {
+  const tone = getScoreColor(score);
+  const badgeTone = tone === "success" ? "success" : tone === "warning" ? "warning" : "critical";
+  return /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "300", children: [
+    /* @__PURE__ */ jsxs(InlineStack, { align: "space-between", children: [
+      /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: title }),
+      /* @__PURE__ */ jsx(Badge, { tone: badgeTone, children: getScoreLabel(score) })
+    ] }),
+    /* @__PURE__ */ jsxs(Text, { as: "p", variant: "heading2xl", fontWeight: "bold", children: [
+      score,
+      /* @__PURE__ */ jsx(Text, { as: "span", variant: "bodyMd", tone: "subdued", children: "/100" })
+    ] }),
+    /* @__PURE__ */ jsx(ProgressBar, { progress: score, tone, size: "small" }),
+    description && /* @__PURE__ */ jsx(Text, { as: "p", variant: "bodySm", tone: "subdued", children: description })
+  ] }) });
+}
+const severityLabel = {
+  critical: "crítica",
+  high: "alta",
+  medium: "média",
+  low: "baixa"
+};
+const severityTone = (severity) => {
+  switch (severity) {
+    case "critical":
+    case "high":
+      return "critical";
+    case "medium":
+      return "warning";
+    default:
+      return "info";
   }
-`;
+};
+function IssuesTable({ issues, title = "Problemas Detectados" }) {
+  if (issues.length === 0) {
+    return /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "200", children: [
+      /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: title }),
+      /* @__PURE__ */ jsx(Text, { as: "p", tone: "success", children: "Nenhum problema encontrado." })
+    ] }) });
+  }
+  const rows = issues.map((issue) => [
+    issue.resourceTitle || issue.resourceType,
+    issue.issueType.replace(/_/g, " "),
+    /* @__PURE__ */ jsx(Badge, { tone: severityTone(issue.severity), children: severityLabel[issue.severity] || issue.severity }, issue.id),
+    issue.message,
+    issue.suggestion || "—"
+  ]);
+  return /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
+    /* @__PURE__ */ jsxs(Text, { as: "h3", variant: "headingMd", children: [
+      title,
+      " (",
+      issues.length,
+      ")"
+    ] }),
+    /* @__PURE__ */ jsx(
+      DataTable,
+      {
+        columnContentTypes: ["text", "text", "text", "text", "text"],
+        headings: ["Recurso", "Tipo", "Severidade", "Problema", "Sugestão"],
+        rows
+      }
+    )
+  ] }) });
+}
+const ACTIONS = [
+  { id: "generate_alt", label: "Gerar ALT para todas as imagens" },
+  { id: "generate_meta_descriptions", label: "Gerar Meta Descriptions" },
+  { id: "generate_seo_titles", label: "Gerar SEO Titles" },
+  { id: "fix_handles", label: "Corrigir Handles" },
+  { id: "update_schema", label: "Atualizar Schema" },
+  { id: "generate_collection_seo", label: "Otimizar Coleções" }
+];
+function BulkActionsPanel({ onAction, loading, lastResult }) {
+  return /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
+    /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Correção em Massa" }),
+    /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", children: "Aplique otimizações em lote via GraphQL Admin API." }),
+    lastResult && /* @__PURE__ */ jsxs(Banner, { tone: "success", children: [
+      lastResult.updated,
+      " recursos atualizados (",
+      lastResult.action,
+      ")"
+    ] }),
+    /* @__PURE__ */ jsx(ButtonGroup, { children: ACTIONS.map((action2) => /* @__PURE__ */ jsx(
+      Button,
+      {
+        onClick: () => onAction(action2.id),
+        loading,
+        size: "slim",
+        children: action2.label
+      },
+      action2.id
+    )) })
+  ] }) });
+}
 const SEO_TITLE_MIN = 30;
 const SEO_TITLE_MAX = 60;
 const SEO_DESC_MAX = 160;
@@ -647,7 +1247,7 @@ function auditCollection(collection) {
 }
 function auditPage(page) {
   const issues = [];
-  const content = stripHtml(page.body || "");
+  const content = stripHtml(page.bodySummary || page.body || "");
   if (!page.title || page.title.length < 10) {
     issues.push({
       resourceType: "page",
@@ -668,7 +1268,7 @@ function auditPage(page) {
       message: "Conteúdo insuficiente para SEO"
     });
   }
-  const hasH1 = (page.body || "").includes("<h1");
+  const hasH1 = (page.bodySummary || page.body || "").includes("<h1");
   if (!hasH1) {
     issues.push({
       resourceType: "page",
@@ -685,7 +1285,7 @@ function auditPage(page) {
 function auditArticle(article) {
   var _a2;
   const issues = [];
-  const content = stripHtml(article.contentHtml || "");
+  const content = stripHtml(article.body || article.summary || "");
   if (!article.summary && content.length < 200) {
     issues.push({
       resourceType: "article",
@@ -696,7 +1296,8 @@ function auditArticle(article) {
       message: "Resumo do artigo ausente"
     });
   }
-  const hasHeadings = (article.contentHtml || "").match(/<h[2-4]/gi);
+  const bodyHtml = article.body || "";
+  const hasHeadings = bodyHtml.match(/<h[2-4]/gi);
   if (!hasHeadings) {
     issues.push({
       resourceType: "article",
@@ -707,7 +1308,7 @@ function auditArticle(article) {
       message: "Artigo sem headings estruturados (H2-H4)"
     });
   }
-  const internalLinks = (article.contentHtml || "").match(/href=["']\/[^"']+/gi);
+  const internalLinks = bodyHtml.match(/href=["']\/[^"']+/gi);
   if (!internalLinks || internalLinks.length < 1) {
     issues.push({
       resourceType: "article",
@@ -762,65 +1363,6 @@ function generateAltText(title, context) {
 function generateSeoHandle(title) {
   return title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 100);
 }
-function generateSeoFilename(title, ext = "jpg") {
-  return `${generateSeoHandle(title)}.${ext}`;
-}
-function getScoreColor(score) {
-  if (score >= 80) return "success";
-  if (score >= 50) return "warning";
-  return "critical";
-}
-function getScoreLabel(score) {
-  if (score >= 90) return "Excelente";
-  if (score >= 80) return "Bom";
-  if (score >= 60) return "Regular";
-  if (score >= 40) return "Precisa melhorar";
-  return "Crítico";
-}
-function ScoreCard({ title, score, description }) {
-  const tone = getScoreColor(score);
-  const badgeTone = tone === "success" ? "success" : tone === "warning" ? "warning" : "critical";
-  return /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "300", children: [
-    /* @__PURE__ */ jsxs(InlineStack, { align: "space-between", children: [
-      /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: title }),
-      /* @__PURE__ */ jsx(Badge, { tone: badgeTone, children: getScoreLabel(score) })
-    ] }),
-    /* @__PURE__ */ jsxs(Text, { as: "p", variant: "heading2xl", fontWeight: "bold", children: [
-      score,
-      /* @__PURE__ */ jsx(Text, { as: "span", variant: "bodyMd", tone: "subdued", children: "/100" })
-    ] }),
-    /* @__PURE__ */ jsx(ProgressBar, { progress: score, tone, size: "small" }),
-    description && /* @__PURE__ */ jsx(Text, { as: "p", variant: "bodySm", tone: "subdued", children: description })
-  ] }) });
-}
-const loader$h = async ({ request }) => {
-  var _a2, _b, _c;
-  const { admin, session } = await authenticate.admin(request);
-  const response = await admin.graphql(GET_COLLECTIONS_SEO, {
-    variables: { first: 50 }
-  });
-  const json = await response.json();
-  const collections = ((_c = (_b = (_a2 = json.data) == null ? void 0 : _a2.collections) == null ? void 0 : _b.edges) == null ? void 0 : _c.map((e) => e.node)) || [];
-  const allIssues = collections.flatMap((c) => auditCollection(c));
-  const score = calculateResourceScore(allIssues, collections.length * 5);
-  const dbIssues = await prisma.auditIssue.findMany({
-    where: { shop: session.shop, resourceType: "collection", fixed: false },
-    take: 50
-  });
-  return { count: collections.length, score, issues: dbIssues.length ? dbIssues : allIssues.slice(0, 50) };
-};
-function CollectionsSeo() {
-  const { count, score, issues } = useLoaderData();
-  return /* @__PURE__ */ jsx(Page, { title: "Collections SEO", subtitle: `${count} coleções analisadas`, children: /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-    /* @__PURE__ */ jsx(Grid, { children: /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 6, md: 4, lg: 4, xl: 4 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Score de Coleções", score }) }) }),
-    /* @__PURE__ */ jsx(IssuesTable, { issues: issues.map((i, idx) => ({ ...i, id: i.id || String(idx) })), title: "Problemas em Coleções" })
-  ] }) });
-}
-const route3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
-  __proto__: null,
-  default: CollectionsSeo,
-  loader: loader$h
-}, Symbol.toStringTag, { value: "Module" }));
 function calculateScores(input) {
   const { issues, totalResources, optimizationsApplied } = input;
   const seoIssues = issues.filter(
@@ -886,68 +1428,71 @@ function aggregateMetrics(issues, activeScripts, estimatedPageWeightKb, optimiza
     totalOptimizations: optimizationsApplied
   };
 }
+const ISSUE_BATCH_SIZE = 50;
+async function createIssuesInBatches(shop, issues) {
+  for (let i = 0; i < issues.length; i += ISSUE_BATCH_SIZE) {
+    const batch = issues.slice(i, i + ISSUE_BATCH_SIZE);
+    await prisma.auditIssue.createMany({
+      data: batch.map((issue) => ({
+        shop,
+        resourceType: issue.resourceType,
+        resourceId: issue.resourceId,
+        resourceTitle: issue.resourceTitle,
+        issueType: issue.issueType,
+        severity: issue.severity,
+        message: issue.message,
+        suggestion: issue.suggestion
+      }))
+    });
+  }
+}
 async function fetchAllProducts(admin) {
-  var _a2;
   const products = [];
   let cursor = null;
   let hasNext = true;
   while (hasNext) {
-    const response = await admin.graphql(GET_PRODUCTS_SEO, {
-      variables: { first: 50, after: cursor }
-    });
-    const json = await response.json();
-    const data = (_a2 = json.data) == null ? void 0 : _a2.products;
-    if (!data) break;
-    for (const edge of data.edges) {
+    const { data, errors } = await adminGraphql(admin, GET_PRODUCTS_SEO, { first: 50, after: cursor });
+    if (errors.length > 0 || !(data == null ? void 0 : data.products)) break;
+    for (const edge of data.products.edges) {
       products.push(edge.node);
     }
-    hasNext = data.pageInfo.hasNextPage;
-    cursor = data.pageInfo.endCursor;
+    hasNext = data.products.pageInfo.hasNextPage;
+    cursor = data.products.pageInfo.endCursor;
     if (products.length >= 500) break;
   }
   return products;
 }
 async function fetchAllCollections(admin) {
-  var _a2;
   const collections = [];
   let cursor = null;
   let hasNext = true;
   while (hasNext) {
-    const response = await admin.graphql(GET_COLLECTIONS_SEO, {
-      variables: { first: 50, after: cursor }
-    });
-    const json = await response.json();
-    const data = (_a2 = json.data) == null ? void 0 : _a2.collections;
-    if (!data) break;
-    for (const edge of data.edges) {
+    const { data, errors } = await adminGraphql(admin, GET_COLLECTIONS_SEO, { first: 50, after: cursor });
+    if (errors.length > 0 || !(data == null ? void 0 : data.collections)) break;
+    for (const edge of data.collections.edges) {
       collections.push(edge.node);
     }
-    hasNext = data.pageInfo.hasNextPage;
-    cursor = data.pageInfo.endCursor;
+    hasNext = data.collections.pageInfo.hasNextPage;
+    cursor = data.collections.pageInfo.endCursor;
   }
   return collections;
 }
 async function runFullAudit(shop, admin) {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
-  const [products, collections, pagesResponse, blogsResponse, filesResponse, scriptsResponse] = await Promise.all([
+  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+  const [products, collections, pagesResult, blogsResult, filesResult] = await Promise.all([
     fetchAllProducts(admin),
     fetchAllCollections(admin),
-    admin.graphql(GET_PAGES_SEO, { variables: { first: 100 } }),
-    admin.graphql(GET_BLOGS_SEO, { variables: { first: 10 } }),
-    admin.graphql(GET_FILES, { variables: { first: 100 } }),
-    admin.graphql(GET_SCRIPT_TAGS)
+    adminGraphql(admin, GET_PAGES_SEO, { first: 100 }),
+    adminGraphql(admin, GET_BLOGS_SEO, { first: 10 }),
+    adminGraphql(admin, GET_FILES, { first: 100 })
   ]);
-  const pagesJson = await pagesResponse.json();
-  const blogsJson = await blogsResponse.json();
-  const filesJson = await filesResponse.json();
-  const scriptsJson = await scriptsResponse.json();
-  const pages = ((_c = (_b = (_a2 = pagesJson.data) == null ? void 0 : _a2.pages) == null ? void 0 : _b.edges) == null ? void 0 : _c.map((e) => e.node)) || [];
-  const blogs = ((_e = (_d = blogsJson.data) == null ? void 0 : _d.blogs) == null ? void 0 : _e.edges) || [];
+  const pages = ((_c = (_b = (_a2 = pagesResult.data) == null ? void 0 : _a2.pages) == null ? void 0 : _b.edges) == null ? void 0 : _c.map((e) => e.node)) || [];
+  const blogs = ((_e = (_d = blogsResult.data) == null ? void 0 : _d.blogs) == null ? void 0 : _e.edges) || [];
   const articles = blogs.flatMap(
     (b) => b.node.articles.edges.map((e) => e.node)
   );
-  const files = ((_h = (_g = (_f = filesJson.data) == null ? void 0 : _f.files) == null ? void 0 : _g.edges) == null ? void 0 : _h.map((e) => e.node)) || [];
-  const scriptTags = ((_k = (_j = (_i = scriptsJson.data) == null ? void 0 : _i.scriptTags) == null ? void 0 : _j.edges) == null ? void 0 : _k.length) || 0;
+  const files = ((_h = (_g = (_f = filesResult.data) == null ? void 0 : _f.files) == null ? void 0 : _g.edges) == null ? void 0 : _h.map((e) => e.node)) || [];
+  const scriptTags = 0;
   const allIssues = [];
   for (const product of products) {
     allIssues.push(...auditProduct(product));
@@ -981,7 +1526,9 @@ async function runFullAudit(shop, admin) {
   let estimatedWeight = 0;
   for (const file of files) {
     const f = file;
-    estimatedWeight += ((_l = f.originalSource) == null ? void 0 : _l.fileSize) || 5e4;
+    const w = ((_i = f.image) == null ? void 0 : _i.width) ?? 800;
+    const h = ((_j = f.image) == null ? void 0 : _j.height) ?? 800;
+    estimatedWeight += Math.round(w * h / 12);
   }
   estimatedWeight = Math.round(estimatedWeight / 1024);
   const brokenLinks = await prisma.brokenLink.count({
@@ -1011,18 +1558,7 @@ async function runFullAudit(shop, admin) {
   );
   await prisma.auditIssue.deleteMany({ where: { shop, fixed: false } });
   if (allIssues.length > 0) {
-    await prisma.auditIssue.createMany({
-      data: allIssues.map((issue) => ({
-        shop,
-        resourceType: issue.resourceType,
-        resourceId: issue.resourceId,
-        resourceTitle: issue.resourceTitle,
-        issueType: issue.issueType,
-        severity: issue.severity,
-        message: issue.message,
-        suggestion: issue.suggestion
-      }))
-    });
+    await createIssuesInBatches(shop, allIssues);
   }
   const snapshot = await prisma.auditSnapshot.create({
     data: {
@@ -1057,147 +1593,6 @@ async function runFullAudit(shop, admin) {
     }
   };
 }
-async function analyzeTheme(admin) {
-  var _a2, _b, _c, _d, _e, _f, _g;
-  const themeResponse = await admin.graphql(GET_THEME);
-  const themeJson = await themeResponse.json();
-  const theme = (_d = (_c = (_b = (_a2 = themeJson.data) == null ? void 0 : _a2.themes) == null ? void 0 : _b.edges) == null ? void 0 : _c[0]) == null ? void 0 : _d.node;
-  if (!theme) {
-    return {
-      heavyAssets: [],
-      totalCss: 0,
-      totalJs: 0,
-      totalAssets: 0,
-      recommendations: ["Nenhum tema principal encontrado"]
-    };
-  }
-  const assetsResponse = await admin.graphql(GET_THEME_ASSETS, {
-    variables: { themeId: theme.id }
-  });
-  const assetsJson = await assetsResponse.json();
-  const files = ((_g = (_f = (_e = assetsJson.data) == null ? void 0 : _e.theme) == null ? void 0 : _f.files) == null ? void 0 : _g.edges) || [];
-  let totalCss = 0;
-  let totalJs = 0;
-  const heavyAssets = [];
-  for (const edge of files) {
-    const file = edge.node;
-    if (file.filename.endsWith(".css") || file.filename.endsWith(".css.liquid")) {
-      totalCss++;
-    }
-    if (file.filename.endsWith(".js") || file.filename.endsWith(".js.liquid")) {
-      totalJs++;
-    }
-    if (file.size > 1e5) {
-      heavyAssets.push({ filename: file.filename, size: file.size });
-    }
-  }
-  heavyAssets.sort((a, b) => b.size - a.size);
-  const recommendations = [];
-  if (totalJs > 20) recommendations.push("Tema possui muitos arquivos JS — considere consolidar");
-  if (totalCss > 15) recommendations.push("CSS excessivo detectado — ative minificação via CDN");
-  if (heavyAssets.length > 0) {
-    recommendations.push(
-      `${heavyAssets.length} assets pesados (>100KB) — otimize ou use lazy load`
-    );
-  }
-  if (recommendations.length === 0) {
-    recommendations.push("Tema em boa condição geral");
-  }
-  return {
-    heavyAssets: heavyAssets.slice(0, 20),
-    totalCss,
-    totalJs,
-    totalAssets: files.length,
-    recommendations
-  };
-}
-const KNOWN_APP_IMPACTS = {
-  "facebook": 120,
-  "meta pixel": 120,
-  "klaviyo": 90,
-  "hotjar": 180,
-  "clarity": 75,
-  "google analytics": 60,
-  "gtm": 80,
-  "tiktok": 100,
-  "pinterest": 85,
-  "snapchat": 95,
-  "judge.me": 70,
-  "yotpo": 65,
-  "loox": 55,
-  "recharge": 80,
-  "bold": 50
-};
-function estimateAppImpacts(scriptSources) {
-  const impacts = [];
-  for (const src of scriptSources) {
-    const lower = src.toLowerCase();
-    for (const [name, ms] of Object.entries(KNOWN_APP_IMPACTS)) {
-      if (lower.includes(name.replace(" ", "")) || lower.includes(name)) {
-        impacts.push({
-          name: name.charAt(0).toUpperCase() + name.slice(1),
-          estimatedMs: ms,
-          impact: ms > 120 ? "high" : ms > 80 ? "medium" : "low",
-          scripts: [src]
-        });
-        break;
-      }
-    }
-  }
-  const unique = /* @__PURE__ */ new Map();
-  for (const impact of impacts) {
-    const existing = unique.get(impact.name);
-    if (!existing || impact.estimatedMs > existing.estimatedMs) {
-      unique.set(impact.name, impact);
-    }
-  }
-  return Array.from(unique.values()).sort((a, b) => b.estimatedMs - a.estimatedMs);
-}
-async function scanBrokenLinks(shop, admin) {
-  var _a2, _b;
-  const [menusResponse, products] = await Promise.all([
-    admin.graphql(GET_MENUS, { variables: { first: 20 } }),
-    fetchAllProducts(admin)
-  ]);
-  const menusJson = await menusResponse.json();
-  const menus = ((_b = (_a2 = menusJson.data) == null ? void 0 : _a2.menus) == null ? void 0 : _b.edges) || [];
-  const broken = [];
-  for (const menuEdge of menus) {
-    const menu = menuEdge.node;
-    for (const item of menu.items || []) {
-      if (item.url && item.url.startsWith("/") && item.url.includes("404-test")) {
-        broken.push({
-          sourceType: "menu",
-          sourceUrl: `/admin/menus`,
-          targetUrl: item.url,
-          statusCode: 404
-        });
-      }
-    }
-  }
-  for (const product of products) {
-    const html = product.descriptionHtml || "";
-    const links2 = html.match(/href=["']([^"']+)["']/gi) || [];
-    for (const link of links2) {
-      const url = link.replace(/href=["']|["']/g, "");
-      if (url.startsWith("http") && url.includes("broken-link")) {
-        broken.push({
-          sourceType: "product",
-          sourceUrl: `/products/${product.handle}`,
-          targetUrl: url,
-          statusCode: 404
-        });
-      }
-    }
-  }
-  if (broken.length > 0) {
-    await prisma.brokenLink.createMany({
-      data: broken.map((b) => ({ shop, ...b, linkType: "internal" })),
-      skipDuplicates: true
-    });
-  }
-  return broken;
-}
 async function getHistoricalScores(shop, limit = 30) {
   return prisma.auditSnapshot.findMany({
     where: { shop },
@@ -1211,622 +1606,6 @@ async function getOrCreateSettings(shop) {
     settings = await prisma.shopSettings.create({ data: { shop } });
   }
   return settings;
-}
-const loader$g = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const links2 = await prisma.brokenLink.findMany({
-    where: { shop: session.shop, fixed: false },
-    orderBy: { lastChecked: "desc" },
-    take: 100
-  });
-  return { links: links2 };
-};
-const action$8 = async ({ request }) => {
-  const { admin, session } = await authenticate.admin(request);
-  const formData = await request.formData();
-  const intent = formData.get("intent");
-  if (intent === "scan") {
-    const found = await scanBrokenLinks(session.shop, admin);
-    return { scanned: found.length };
-  }
-  if (intent === "create_redirect") {
-    const linkId = formData.get("linkId");
-    const link = await prisma.brokenLink.findUnique({ where: { id: linkId } });
-    if (link) {
-      await prisma.redirect.create({
-        data: {
-          shop: session.shop,
-          fromPath: link.targetUrl,
-          toPath: "/",
-          type: 301
-        }
-      });
-      await prisma.brokenLink.update({
-        where: { id: linkId },
-        data: { fixed: true }
-      });
-    }
-  }
-  return { success: true };
-};
-function BrokenLinks() {
-  var _a2;
-  const { links: links2 } = useLoaderData();
-  const fetcher = useFetcher();
-  const rows = links2.map((l) => [
-    l.sourceType,
-    l.sourceUrl,
-    l.targetUrl,
-    l.statusCode ? String(l.statusCode) : "—",
-    /* @__PURE__ */ jsx(Badge, { tone: l.statusCode === 404 ? "critical" : "warning", children: l.linkType }, l.id),
-    /* @__PURE__ */ jsx(
-      Button,
-      {
-        size: "slim",
-        onClick: () => fetcher.submit({ intent: "create_redirect", linkId: l.id }, { method: "POST" }),
-        children: "Criar Redirect"
-      },
-      `fix-${l.id}`
-    )
-  ]);
-  return /* @__PURE__ */ jsx(
-    Page,
-    {
-      title: "Broken Links",
-      primaryAction: {
-        content: "Escanear Links",
-        loading: fetcher.state !== "idle",
-        onAction: () => fetcher.submit({ intent: "scan" }, { method: "POST" })
-      },
-      children: /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-        ((_a2 = fetcher.data) == null ? void 0 : _a2.scanned) !== void 0 && /* @__PURE__ */ jsxs(Banner, { tone: "info", children: [
-          "Varredura concluída. ",
-          fetcher.data.scanned,
-          " novos links detectados."
-        ] }),
-        /* @__PURE__ */ jsx(Card, { children: rows.length > 0 ? /* @__PURE__ */ jsx(
-          DataTable,
-          {
-            columnContentTypes: ["text", "text", "text", "numeric", "text", "text"],
-            headings: ["Origem", "Página fonte", "URL alvo", "Status", "Tipo", "Ação"],
-            rows
-          }
-        ) : /* @__PURE__ */ jsx(Banner, { tone: "success", children: "Nenhum link quebrado detectado." }) })
-      ] })
-    }
-  );
-}
-const route4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
-  __proto__: null,
-  action: action$8,
-  default: BrokenLinks,
-  loader: loader$g
-}, Symbol.toStringTag, { value: "Module" }));
-const loader$f = async ({ request }) => {
-  var _a2, _b, _c;
-  const { admin, session } = await authenticate.admin(request);
-  const response = await admin.graphql(GET_PRODUCTS_SEO, {
-    variables: { first: 50 }
-  });
-  const json = await response.json();
-  const products = ((_c = (_b = (_a2 = json.data) == null ? void 0 : _a2.products) == null ? void 0 : _b.edges) == null ? void 0 : _c.map((e) => e.node)) || [];
-  const allIssues = products.flatMap((p) => auditProduct(p));
-  const score = calculateResourceScore(allIssues, products.length * 8);
-  const dbIssues = await prisma.auditIssue.findMany({
-    where: { shop: session.shop, resourceType: "product", fixed: false },
-    take: 50
-  });
-  return { products: products.length, score, issues: dbIssues.length ? dbIssues : allIssues.slice(0, 50) };
-};
-function ProductsSeo() {
-  const { products, score, issues } = useLoaderData();
-  return /* @__PURE__ */ jsx(Page, { title: "Products SEO", subtitle: `${products} produtos analisados`, children: /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-    /* @__PURE__ */ jsx(Grid, { children: /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 6, md: 4, lg: 4, xl: 4 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Score de Produtos", score }) }) }),
-    /* @__PURE__ */ jsx(IssuesTable, { issues: issues.map((i, idx) => ({ ...i, id: i.id || String(idx) })), title: "Problemas em Produtos" })
-  ] }) });
-}
-const route5 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
-  __proto__: null,
-  default: ProductsSeo,
-  loader: loader$f
-}, Symbol.toStringTag, { value: "Module" }));
-const loader$e = async ({ request }) => {
-  var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j;
-  const { admin, session } = await authenticate.admin(request);
-  const [scriptsRes, filesRes, themeRes, managedScripts] = await Promise.all([
-    admin.graphql(GET_SCRIPT_TAGS),
-    admin.graphql(GET_FILES, { variables: { first: 50 } }),
-    admin.graphql(GET_THEME),
-    prisma.managedScript.findMany({ where: { shop: session.shop, enabled: true } })
-  ]);
-  const scriptsJson = await scriptsRes.json();
-  const filesJson = await filesRes.json();
-  const themeJson = await themeRes.json();
-  const scriptTags = ((_c = (_b = (_a2 = scriptsJson.data) == null ? void 0 : _a2.scriptTags) == null ? void 0 : _b.edges) == null ? void 0 : _c.map(
-    (e) => e.node.src
-  )) || [];
-  const allScriptSources = [...scriptTags, ...managedScripts.map((s) => s.name)];
-  const appImpacts = estimateAppImpacts(allScriptSources);
-  const files = ((_f = (_e = (_d = filesJson.data) == null ? void 0 : _d.files) == null ? void 0 : _e.edges) == null ? void 0 : _f.length) || 0;
-  const theme = (_j = (_i = (_h = (_g = themeJson.data) == null ? void 0 : _g.themes) == null ? void 0 : _h.edges) == null ? void 0 : _i[0]) == null ? void 0 : _j.node;
-  return {
-    metrics: {
-      images: files,
-      scripts: scriptTags.length + managedScripts.length,
-      fonts: 0,
-      css: 0,
-      js: scriptTags.length,
-      apps: appImpacts.length
-    },
-    themeName: (theme == null ? void 0 : theme.name) || "—",
-    appImpacts,
-    managedScripts: managedScripts.length
-  };
-};
-function Performance() {
-  const { metrics, themeName, appImpacts } = useLoaderData();
-  const impactTone = (impact) => impact === "high" ? "critical" : impact === "medium" ? "warning" : "success";
-  const rows = appImpacts.map((app) => {
-    var _a2;
-    return [
-      app.name,
-      `${app.estimatedMs}ms`,
-      /* @__PURE__ */ jsx(Badge, { tone: impactTone(app.impact), children: app.impact }, app.name),
-      ((_a2 = app.scripts[0]) == null ? void 0 : _a2.slice(0, 50)) || "—"
-    ];
-  });
-  return /* @__PURE__ */ jsx(Page, { title: "Performance Analyzer", subtitle: `Tema: ${themeName}`, children: /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-    /* @__PURE__ */ jsx(Banner, { tone: "info", children: "Análise baseada em scripts detectados e apps instalados. Impactos são estimativas." }),
-    /* @__PURE__ */ jsx(Grid, { children: [
-      { label: "Imagens", value: metrics.images },
-      { label: "Scripts", value: metrics.scripts },
-      { label: "Apps analisados", value: metrics.apps }
-    ].map((m) => /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 4, md: 4, lg: 4, xl: 4 }, children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "100", children: [
-      /* @__PURE__ */ jsx(Text, { as: "p", variant: "bodySm", tone: "subdued", children: m.label }),
-      /* @__PURE__ */ jsx(Text, { as: "p", variant: "headingLg", fontWeight: "bold", children: m.value })
-    ] }) }) }, m.label)) }),
-    /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
-      /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "App Impact Scanner" }),
-      rows.length > 0 ? /* @__PURE__ */ jsx(
-        DataTable,
-        {
-          columnContentTypes: ["text", "numeric", "text", "text"],
-          headings: ["App/Script", "Impacto estimado", "Nível", "Fonte"],
-          rows
-        }
-      ) : /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", children: "Nenhum script de terceiros detectado." })
-    ] }) })
-  ] }) });
-}
-const route6 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
-  __proto__: null,
-  default: Performance,
-  loader: loader$e
-}, Symbol.toStringTag, { value: "Module" }));
-const loader$d = async ({ request }) => {
-  var _a2, _b, _c;
-  const { admin } = await authenticate.admin(request);
-  const [themeAudit, scriptsRes] = await Promise.all([
-    analyzeTheme(admin),
-    admin.graphql(GET_SCRIPT_TAGS)
-  ]);
-  const scriptsJson = await scriptsRes.json();
-  const scriptSources = ((_c = (_b = (_a2 = scriptsJson.data) == null ? void 0 : _a2.scriptTags) == null ? void 0 : _b.edges) == null ? void 0 : _c.map(
-    (e) => e.node.src
-  )) || [];
-  const appImpacts = estimateAppImpacts(scriptSources);
-  return { themeAudit, appImpacts };
-};
-function ThemeAudit() {
-  const { themeAudit, appImpacts } = useLoaderData();
-  const assetRows = themeAudit.heavyAssets.map((a) => [
-    a.filename,
-    `${Math.round(a.size / 1024)} KB`,
-    a.size > 2e5 ? "Alto" : "Médio"
-  ]);
-  const appRows = appImpacts.map((a) => [
-    a.name,
-    `${a.estimatedMs}ms`,
-    a.impact === "high" ? "Alto impacto" : a.impact === "medium" ? "Médio impacto" : "Baixo impacto"
-  ]);
-  return /* @__PURE__ */ jsx(Page, { title: "Theme Audit", children: /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-    /* @__PURE__ */ jsx(Grid, { children: [
-      { label: "Total de assets", value: themeAudit.totalAssets },
-      { label: "Arquivos CSS", value: themeAudit.totalCss },
-      { label: "Arquivos JS", value: themeAudit.totalJs },
-      { label: "Assets pesados", value: themeAudit.heavyAssets.length }
-    ].map((s) => /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "100", children: [
-      /* @__PURE__ */ jsx(Text, { as: "p", variant: "bodySm", tone: "subdued", children: s.label }),
-      /* @__PURE__ */ jsx(Text, { as: "p", variant: "headingLg", fontWeight: "bold", children: s.value })
-    ] }) }) }, s.label)) }),
-    /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "300", children: [
-      /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Recomendações" }),
-      /* @__PURE__ */ jsx(List, { type: "bullet", children: themeAudit.recommendations.map((r) => /* @__PURE__ */ jsx(List.Item, { children: r }, r)) })
-    ] }) }),
-    assetRows.length > 0 && /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(
-      DataTable,
-      {
-        columnContentTypes: ["text", "numeric", "text"],
-        headings: ["Asset", "Tamanho", "Impacto"],
-        rows: assetRows
-      }
-    ) }),
-    /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "300", children: [
-      /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "App Impact Scanner" }),
-      /* @__PURE__ */ jsx(Banner, { tone: "info", children: "Apps que injetam código no tema" }),
-      appRows.length > 0 ? /* @__PURE__ */ jsx(
-        DataTable,
-        {
-          columnContentTypes: ["text", "numeric", "text"],
-          headings: ["App", "Impacto estimado", "Ranking"],
-          rows: appRows
-        }
-      ) : /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", children: "Nenhum app de terceiros detectado via script tags." })
-    ] }) })
-  ] }) });
-}
-const route7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
-  __proto__: null,
-  default: ThemeAudit,
-  loader: loader$d
-}, Symbol.toStringTag, { value: "Module" }));
-const loader$c = async ({ request }) => {
-  var _a2, _b, _c;
-  const { admin, session } = await authenticate.admin(request);
-  const response = await admin.graphql(GET_PAGES_SEO, {
-    variables: { first: 50 }
-  });
-  const json = await response.json();
-  const pages = ((_c = (_b = (_a2 = json.data) == null ? void 0 : _a2.pages) == null ? void 0 : _b.edges) == null ? void 0 : _c.map((e) => e.node)) || [];
-  const allIssues = pages.flatMap((p) => auditPage(p));
-  const score = calculateResourceScore(allIssues, pages.length * 4);
-  const dbIssues = await prisma.auditIssue.findMany({
-    where: { shop: session.shop, resourceType: "page", fixed: false },
-    take: 50
-  });
-  return { count: pages.length, score, issues: dbIssues.length ? dbIssues : allIssues.slice(0, 50) };
-};
-function PagesSeo() {
-  const { count, score, issues } = useLoaderData();
-  return /* @__PURE__ */ jsx(Page, { title: "Pages SEO", subtitle: `${count} páginas analisadas`, children: /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-    /* @__PURE__ */ jsx(Grid, { children: /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 6, md: 4, lg: 4, xl: 4 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Score de Páginas", score }) }) }),
-    /* @__PURE__ */ jsx(IssuesTable, { issues: issues.map((i, idx) => ({ ...i, id: i.id || String(idx) })), title: "Problemas em Páginas" })
-  ] }) });
-}
-const route8 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
-  __proto__: null,
-  default: PagesSeo,
-  loader: loader$c
-}, Symbol.toStringTag, { value: "Module" }));
-const UPDATE_PRODUCT_SEO = `#graphql
-  mutation UpdateProductSeo($input: ProductInput!) {
-    productUpdate(input: $input) {
-      product {
-        id
-        title
-        handle
-        seo {
-          title
-          description
-        }
-      }
-      userErrors {
-        field
-        message
-      }
-    }
-  }
-`;
-const UPDATE_COLLECTION_SEO = `#graphql
-  mutation UpdateCollectionSeo($input: CollectionInput!) {
-    collectionUpdate(input: $input) {
-      collection {
-        id
-        title
-        seo {
-          title
-          description
-        }
-      }
-      userErrors {
-        field
-        message
-      }
-    }
-  }
-`;
-const UPDATE_MEDIA_ALT = `#graphql
-  mutation UpdateMediaAlt($input: [FileUpdateInput!]!) {
-    fileUpdate(files: $input) {
-      files {
-        ... on MediaImage {
-          id
-          alt
-        }
-      }
-      userErrors {
-        field
-        message
-      }
-    }
-  }
-`;
-const CREATE_URL_REDIRECT = `#graphql
-  mutation CreateUrlRedirect($urlRedirect: UrlRedirectInput!) {
-    urlRedirectCreate(urlRedirect: $urlRedirect) {
-      urlRedirect {
-        id
-        path
-        target
-      }
-      userErrors {
-        field
-        message
-      }
-    }
-  }
-`;
-const DELETE_URL_REDIRECT = `#graphql
-  mutation DeleteUrlRedirect($id: ID!) {
-    urlRedirectDelete(id: $id) {
-      deletedUrlRedirectId
-      userErrors {
-        field
-        message
-      }
-    }
-  }
-`;
-const CREATE_METAFIELD = `#graphql
-  mutation CreateMetafield($metafields: [MetafieldsSetInput!]!) {
-    metafieldsSet(metafields: $metafields) {
-      metafields {
-        id
-        key
-        value
-      }
-      userErrors {
-        field
-        message
-      }
-    }
-  }
-`;
-const loader$b = async ({ request }) => {
-  var _a2, _b, _c;
-  const { admin, session } = await authenticate.admin(request);
-  const [shopifyRedirects, localRedirects] = await Promise.all([
-    admin.graphql(GET_URL_REDIRECTS, { variables: { first: 50 } }),
-    prisma.redirect.findMany({ where: { shop: session.shop }, orderBy: { createdAt: "desc" } })
-  ]);
-  const json = await shopifyRedirects.json();
-  const shopify2 = ((_c = (_b = (_a2 = json.data) == null ? void 0 : _a2.urlRedirects) == null ? void 0 : _b.edges) == null ? void 0 : _c.map(
-    (e) => e.node
-  )) || [];
-  return { shopifyRedirects: shopify2, localRedirects };
-};
-const action$7 = async ({ request }) => {
-  const { admin, session } = await authenticate.admin(request);
-  const formData = await request.formData();
-  const intent = formData.get("intent");
-  if (intent === "create") {
-    const fromPath = formData.get("fromPath");
-    const toPath = formData.get("toPath");
-    const type = parseInt(formData.get("type")) || 301;
-    await admin.graphql(CREATE_URL_REDIRECT, {
-      variables: { urlRedirect: { path: fromPath, target: toPath } }
-    });
-    await prisma.redirect.create({
-      data: { shop: session.shop, fromPath, toPath, type }
-    });
-  }
-  if (intent === "delete") {
-    const id = formData.get("id");
-    await admin.graphql(DELETE_URL_REDIRECT, { variables: { id } }).catch(() => {
-    });
-    await prisma.redirect.delete({ where: { id: formData.get("localId") } }).catch(() => {
-    });
-  }
-  if (intent === "import_csv") {
-    const csv = formData.get("csv");
-    const lines = csv.split("\n").filter(Boolean);
-    let imported = 0;
-    for (const line of lines.slice(1)) {
-      const [fromPath, toPath, typeStr] = line.split(",").map((s) => s.trim());
-      if (fromPath && toPath) {
-        await admin.graphql(CREATE_URL_REDIRECT, {
-          variables: { urlRedirect: { path: fromPath, target: toPath } }
-        }).catch(() => {
-        });
-        await prisma.redirect.create({
-          data: {
-            shop: session.shop,
-            fromPath,
-            toPath,
-            type: parseInt(typeStr) || 301
-          }
-        }).catch(() => {
-        });
-        imported++;
-      }
-    }
-    return { imported };
-  }
-  if (intent === "export") {
-    const redirects = await prisma.redirect.findMany({ where: { shop: session.shop } });
-    const csv = "from,to,type\n" + redirects.map((r) => `${r.fromPath},${r.toPath},${r.type}`).join("\n");
-    return { csv };
-  }
-  return { success: true };
-};
-function Redirects() {
-  var _a2, _b;
-  const { shopifyRedirects, localRedirects } = useLoaderData();
-  const fetcher = useFetcher();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [importModal, setImportModal] = useState(false);
-  const [form, setForm] = useState({ fromPath: "", toPath: "", type: "301" });
-  const [csvContent, setCsvContent] = useState("from,to,type\n/old-page,/new-page,301");
-  const allRedirects = [
-    ...shopifyRedirects.map((r) => ({
-      id: r.id,
-      from: r.path,
-      to: r.target,
-      type: 301,
-      source: "shopify"
-    })),
-    ...localRedirects.map((r) => ({
-      id: r.id,
-      from: r.fromPath,
-      to: r.toPath,
-      type: r.type,
-      source: "local"
-    }))
-  ];
-  const rows = allRedirects.map((r) => [
-    r.from,
-    r.to,
-    /* @__PURE__ */ jsx(Badge, { tone: r.type === 301 ? "info" : "warning", children: r.type }, `type-${r.id}`),
-    r.source
-  ]);
-  return /* @__PURE__ */ jsxs(
-    Page,
-    {
-      title: "Redirect Manager",
-      primaryAction: { content: "Novo Redirect", onAction: () => setModalOpen(true) },
-      secondaryActions: [
-        { content: "Importar CSV", onAction: () => setImportModal(true) },
-        {
-          content: "Exportar CSV",
-          onAction: () => fetcher.submit({ intent: "export" }, { method: "POST" })
-        }
-      ],
-      children: [
-        /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-          ((_a2 = fetcher.data) == null ? void 0 : _a2.imported) !== void 0 && /* @__PURE__ */ jsxs(Banner, { tone: "success", children: [
-            fetcher.data.imported,
-            " redirects importados."
-          ] }),
-          ((_b = fetcher.data) == null ? void 0 : _b.csv) && /* @__PURE__ */ jsx(Banner, { tone: "info", children: /* @__PURE__ */ jsx("pre", { style: { whiteSpace: "pre-wrap", fontSize: 12 }, children: fetcher.data.csv }) }),
-          /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(
-            DataTable,
-            {
-              columnContentTypes: ["text", "text", "text", "text"],
-              headings: ["De", "Para", "Tipo", "Origem"],
-              rows
-            }
-          ) })
-        ] }),
-        /* @__PURE__ */ jsx(
-          Modal,
-          {
-            open: modalOpen,
-            onClose: () => setModalOpen(false),
-            title: "Novo Redirect",
-            primaryAction: {
-              content: "Criar",
-              onAction: () => {
-                fetcher.submit({ intent: "create", ...form }, { method: "POST" });
-                setModalOpen(false);
-              }
-            },
-            children: /* @__PURE__ */ jsx(Modal.Section, { children: /* @__PURE__ */ jsxs(FormLayout, { children: [
-              /* @__PURE__ */ jsx(TextField, { label: "De (path)", value: form.fromPath, onChange: (v) => setForm({ ...form, fromPath: v }), autoComplete: "off" }),
-              /* @__PURE__ */ jsx(TextField, { label: "Para (URL ou path)", value: form.toPath, onChange: (v) => setForm({ ...form, toPath: v }), autoComplete: "off" }),
-              /* @__PURE__ */ jsx(
-                Select,
-                {
-                  label: "Tipo",
-                  options: [
-                    { label: "301 — Permanente", value: "301" },
-                    { label: "302 — Temporário", value: "302" }
-                  ],
-                  value: form.type,
-                  onChange: (v) => setForm({ ...form, type: v })
-                }
-              )
-            ] }) })
-          }
-        ),
-        /* @__PURE__ */ jsx(
-          Modal,
-          {
-            open: importModal,
-            onClose: () => setImportModal(false),
-            title: "Importar CSV",
-            primaryAction: {
-              content: "Importar",
-              onAction: () => {
-                fetcher.submit({ intent: "import_csv", csv: csvContent }, { method: "POST" });
-                setImportModal(false);
-              }
-            },
-            children: /* @__PURE__ */ jsx(Modal.Section, { children: /* @__PURE__ */ jsx(
-              TextField,
-              {
-                label: "Conteúdo CSV",
-                value: csvContent,
-                onChange: setCsvContent,
-                multiline: 8,
-                autoComplete: "off",
-                helpText: "Formato: from,to,type"
-              }
-            ) })
-          }
-        )
-      ]
-    }
-  );
-}
-const route9 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
-  __proto__: null,
-  action: action$7,
-  default: Redirects,
-  loader: loader$b
-}, Symbol.toStringTag, { value: "Module" }));
-const ACTIONS = [
-  { id: "generate_alt", label: "Gerar ALT para todas as imagens" },
-  { id: "generate_meta_descriptions", label: "Gerar Meta Descriptions" },
-  { id: "generate_seo_titles", label: "Gerar SEO Titles" },
-  { id: "fix_handles", label: "Corrigir Handles" },
-  { id: "update_schema", label: "Atualizar Schema" },
-  { id: "generate_collection_seo", label: "Otimizar Coleções" }
-];
-function BulkActionsPanel({ onAction, loading, lastResult }) {
-  return /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
-    /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Correção em Massa" }),
-    /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", children: "Aplique otimizações em lote via GraphQL Admin API." }),
-    lastResult && /* @__PURE__ */ jsxs(Banner, { tone: "success", children: [
-      lastResult.updated,
-      " recursos atualizados (",
-      lastResult.action,
-      ")"
-    ] }),
-    /* @__PURE__ */ jsx(ButtonGroup, { children: ACTIONS.map((action2) => /* @__PURE__ */ jsx(
-      Button,
-      {
-        onClick: () => onAction(action2.id),
-        loading,
-        size: "slim",
-        children: action2.label
-      },
-      action2.id
-    )) })
-  ] }) });
-}
-const SUGGESTIONS = [
-  "Quais produtos possuem pior SEO?",
-  "Como melhorar a velocidade da homepage?",
-  "Quais páginas não possuem meta description?",
-  "Qual app está mais impactando performance?"
-];
-function AIAssistantPanel({ onAsk, answer, loading }) {
-  return /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
-    /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "SEO AI Assistant" }),
-    /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", children: "Perguntas sobre os dados da sua loja." }),
-    /* @__PURE__ */ jsx(InlineStack, { gap: "200", wrap: true, children: SUGGESTIONS.map((q) => /* @__PURE__ */ jsx(Button, { onClick: () => onAsk(q), size: "slim", loading, children: q }, q)) }),
-    answer && /* @__PURE__ */ jsx(Banner, { tone: "info", children: /* @__PURE__ */ jsx(Text, { as: "p", children: answer }) })
-  ] }) });
 }
 async function logOptimization(shop, action2, resourceType, resourceId, details) {
   await prisma.optimizationLog.create({
@@ -1842,8 +1621,8 @@ async function bulkGenerateAltTexts(shop, admin) {
     const response = await admin.graphql(GET_FILES, {
       variables: { first: 50, after: cursor }
     });
-    const json = await response.json();
-    const files = (_a2 = json.data) == null ? void 0 : _a2.files;
+    const json2 = await response.json();
+    const files = (_a2 = json2.data) == null ? void 0 : _a2.files;
     if (!files) break;
     const toUpdate = [];
     for (const edge of files.edges) {
@@ -1882,8 +1661,8 @@ async function bulkGenerateMetaDescriptions(shop, admin) {
     const response = await admin.graphql(GET_PRODUCTS_SEO, {
       variables: { first: 50, after: cursor }
     });
-    const json = await response.json();
-    const products = (_a2 = json.data) == null ? void 0 : _a2.products;
+    const json2 = await response.json();
+    const products = (_a2 = json2.data) == null ? void 0 : _a2.products;
     if (!products) break;
     for (const edge of products.edges) {
       const product = edge.node;
@@ -1916,8 +1695,8 @@ async function bulkGenerateSeoTitles(shop, admin) {
     const response = await admin.graphql(GET_PRODUCTS_SEO, {
       variables: { first: 50, after: cursor }
     });
-    const json = await response.json();
-    const products = (_a2 = json.data) == null ? void 0 : _a2.products;
+    const json2 = await response.json();
+    const products = (_a2 = json2.data) == null ? void 0 : _a2.products;
     if (!products) break;
     for (const edge of products.edges) {
       const product = edge.node;
@@ -1953,8 +1732,8 @@ async function bulkFixHandles(shop, admin) {
     const response = await admin.graphql(GET_PRODUCTS_SEO, {
       variables: { first: 50, after: cursor }
     });
-    const json = await response.json();
-    const products = (_a2 = json.data) == null ? void 0 : _a2.products;
+    const json2 = await response.json();
+    const products = (_a2 = json2.data) == null ? void 0 : _a2.products;
     if (!products) break;
     for (const edge of products.edges) {
       const product = edge.node;
@@ -2012,8 +1791,8 @@ async function bulkGenerateCollectionSeo(shop, admin) {
     const response = await admin.graphql(GET_COLLECTIONS_SEO, {
       variables: { first: 50, after: cursor }
     });
-    const json = await response.json();
-    const collections = (_a2 = json.data) == null ? void 0 : _a2.collections;
+    const json2 = await response.json();
+    const collections = (_a2 = json2.data) == null ? void 0 : _a2.collections;
     if (!collections) break;
     for (const edge of collections.edges) {
       const collection = edge.node;
@@ -2056,7 +1835,7 @@ async function runBulkAction(shop, admin, action2) {
       throw new Error(`Ação desconhecida: ${action2}`);
   }
 }
-const loader$a = async ({ request }) => {
+const loader$6 = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
   const issues = await prisma.auditIssue.findMany({
@@ -2070,7 +1849,7 @@ const loader$a = async ({ request }) => {
     page: issues.filter((i) => i.resourceType === "page"),
     article: issues.filter((i) => i.resourceType === "article")
   };
-  return {
+  return json({
     issues,
     scores: {
       products: calculateResourceScore(byType.product, Math.max(byType.product.length, 1) * 8),
@@ -2084,39 +1863,51 @@ const loader$a = async ({ request }) => {
       pages: byType.page.length,
       articles: byType.article.length
     }
-  };
+  });
 };
-const action$6 = async ({ request }) => {
+const action$2 = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
-  if (intent === "run_audit") {
-    await runFullAudit(session.shop, admin);
-    return { success: true };
+  try {
+    if (intent === "run_audit") {
+      await runFullAudit(session.shop, admin);
+      return json({ success: true });
+    }
+    if (intent === "bulk_action") {
+      const actionType = formData.get("action");
+      const result = await runBulkAction(session.shop, admin, actionType);
+      return json({ success: true, bulk: { action: actionType, updated: result.updated } });
+    }
+    return json({ success: false, error: "Ação desconhecida" });
+  } catch (error) {
+    console.error("[seo-audit action]", error);
+    return json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Erro ao processar. Tente novamente."
+      },
+      { status: 500 }
+    );
   }
-  if (intent === "bulk_action") {
-    const actionType = formData.get("action");
-    const result = await runBulkAction(session.shop, admin, actionType);
-    return { success: true, bulk: { action: actionType, updated: result.updated } };
-  }
-  return { success: false };
 };
 function SeoAudit() {
-  var _a2, _b;
+  var _a2, _b, _c, _d;
   const { issues, scores, counts } = useLoaderData();
   const fetcher = useFetcher();
   const isLoading = fetcher.state !== "idle";
   return /* @__PURE__ */ jsx(
     Page,
     {
-      title: "SEO Audit",
+      title: "Auditoria SEO",
       primaryAction: {
-        content: "Escanear Loja",
-        loading: isLoading,
+        content: "Escanear loja",
+        loading: isLoading && ((_a2 = fetcher.formData) == null ? void 0 : _a2.get("intent")) === "run_audit",
         onAction: () => fetcher.submit({ intent: "run_audit" }, { method: "POST" })
       },
       children: /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-        ((_a2 = fetcher.data) == null ? void 0 : _a2.success) && /* @__PURE__ */ jsx(Banner, { tone: "success", children: "Auditoria atualizada!" }),
+        ((_b = fetcher.data) == null ? void 0 : _b.success) && !fetcher.data.error && /* @__PURE__ */ jsx(Banner, { tone: "success", children: "Auditoria atualizada!" }),
+        ((_c = fetcher.data) == null ? void 0 : _c.error) && /* @__PURE__ */ jsx(Banner, { tone: "critical", children: fetcher.data.error }),
         /* @__PURE__ */ jsxs(Grid, { children: [
           /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Produtos", score: scores.products, description: `${counts.products} problemas` }) }),
           /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Coleções", score: scores.collections, description: `${counts.collections} problemas` }) }),
@@ -2124,17 +1915,14 @@ function SeoAudit() {
           /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Blog", score: scores.articles, description: `${counts.articles} problemas` }) })
         ] }),
         /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "300", children: [
-          /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Verificações Realizadas" }),
+          /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Verificações realizadas" }),
           /* @__PURE__ */ jsx(BlockStack, { gap: "100", children: [
-            "Meta Title ausente",
-            "Meta Description ausente",
-            "Título muito curto/longo",
+            "Meta title ausente",
+            "Meta description ausente",
+            "Título curto ou longo",
             "Handle ruim",
             "ALT ausente",
-            "Conteúdo curto",
-            "Headings ausentes",
-            "Links internos",
-            "Schema Article"
+            "Conteúdo curto"
           ].map((check) => /* @__PURE__ */ jsx(Badge, { tone: "info", children: check }, check)) })
         ] }) }),
         /* @__PURE__ */ jsxs(Layout, { children: [
@@ -2143,7 +1931,7 @@ function SeoAudit() {
             BulkActionsPanel,
             {
               loading: isLoading,
-              lastResult: ((_b = fetcher.data) == null ? void 0 : _b.bulk) || null,
+              lastResult: ((_d = fetcher.data) == null ? void 0 : _d.bulk) || null,
               onAction: (action2) => fetcher.submit({ intent: "bulk_action", action: action2 }, { method: "POST" })
             }
           ) })
@@ -2152,423 +1940,52 @@ function SeoAudit() {
     }
   );
 }
-const route10 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const route4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  action: action$6,
+  action: action$2,
   default: SeoAudit,
-  loader: loader$a
+  loader: loader$6
 }, Symbol.toStringTag, { value: "Module" }));
-const loader$9 = async ({ request }) => {
-  var _a2, _b;
-  const { admin, session } = await authenticate.admin(request);
-  const response = await admin.graphql(GET_BLOGS_SEO, {
-    variables: { first: 10 }
+const loader$5 = ({ request }) => {
+  const origin = new URL(request.url).origin;
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${origin}/</loc>
+  </url>
+</urlset>
+`;
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/xml; charset=utf-8",
+      "Cache-Control": "public, max-age=86400"
+    }
   });
-  const json = await response.json();
-  const blogs = ((_b = (_a2 = json.data) == null ? void 0 : _a2.blogs) == null ? void 0 : _b.edges) || [];
-  const articles = blogs.flatMap(
-    (b) => b.node.articles.edges.map((e) => e.node)
-  );
-  const allIssues = articles.flatMap((a) => auditArticle(a));
-  const score = calculateResourceScore(allIssues, articles.length * 5);
-  const dbIssues = await prisma.auditIssue.findMany({
-    where: { shop: session.shop, resourceType: "article", fixed: false },
-    take: 50
-  });
-  return { count: articles.length, score, issues: dbIssues.length ? dbIssues : allIssues.slice(0, 50) };
 };
-function BlogSeo() {
-  const { count, score, issues } = useLoaderData();
-  return /* @__PURE__ */ jsx(Page, { title: "Blog SEO", subtitle: `${count} artigos analisados`, children: /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-    /* @__PURE__ */ jsx(Grid, { children: /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 6, md: 4, lg: 4, xl: 4 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Score do Blog", score }) }) }),
-    /* @__PURE__ */ jsx(IssuesTable, { issues: issues.map((i, idx) => ({ ...i, id: i.id || String(idx) })), title: "Problemas em Artigos" })
-  ] }) });
-}
-const route11 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const route5 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  default: BlogSeo,
-  loader: loader$9
+  loader: loader$5
 }, Symbol.toStringTag, { value: "Module" }));
-const loader$8 = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const settings = await getOrCreateSettings(session.shop);
-  return { settings };
-};
-const action$5 = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const formData = await request.formData();
-  const settings = await prisma.shopSettings.update({
-    where: { shop: session.shop },
-    data: {
-      lazyLoadEnabled: formData.get("lazyLoadEnabled") === "true",
-      delayJsEnabled: formData.get("delayJsEnabled") === "true",
-      dnsPrefetchEnabled: formData.get("dnsPrefetchEnabled") === "true",
-      preconnectEnabled: formData.get("preconnectEnabled") === "true",
-      fontOptimization: formData.get("fontOptimization") === "true",
-      schemaInjection: formData.get("schemaInjection") === "true",
-      scriptManagerEnabled: formData.get("scriptManagerEnabled") === "true",
-      redirectManagerEnabled: formData.get("redirectManagerEnabled") === "true"
+const loader$4 = ({ request }) => {
+  const origin = new URL(request.url).origin;
+  const body = `# Dreams SEO Pro — backend do app Shopify (não indexar)
+User-agent: *
+Disallow: /
+
+Sitemap: ${origin}/sitemap.xml
+`;
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "public, max-age=86400"
     }
   });
-  return { success: true, settings };
 };
-function Settings() {
-  var _a2, _b;
-  const { settings } = useLoaderData();
-  const fetcher = useFetcher();
-  const s = ((_a2 = fetcher.data) == null ? void 0 : _a2.settings) || settings;
-  const save = (key, value) => {
-    fetcher.submit(
-      {
-        lazyLoadEnabled: String(s.lazyLoadEnabled),
-        delayJsEnabled: String(s.delayJsEnabled),
-        dnsPrefetchEnabled: String(s.dnsPrefetchEnabled),
-        preconnectEnabled: String(s.preconnectEnabled),
-        fontOptimization: String(s.fontOptimization),
-        schemaInjection: String(s.schemaInjection),
-        scriptManagerEnabled: String(s.scriptManagerEnabled),
-        redirectManagerEnabled: String(s.redirectManagerEnabled),
-        [key]: String(value)
-      },
-      { method: "POST" }
-    );
-  };
-  return /* @__PURE__ */ jsx(Page, { title: "Settings", children: /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-    ((_b = fetcher.data) == null ? void 0 : _b.success) && /* @__PURE__ */ jsx(Banner, { tone: "success", children: "Configurações salvas!" }),
-    /* @__PURE__ */ jsxs(Layout, { children: [
-      /* @__PURE__ */ jsx(Layout.Section, { children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
-        /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Performance" }),
-        /* @__PURE__ */ jsx(Checkbox, { label: "Lazy Load", checked: s.lazyLoadEnabled, onChange: (v) => save("lazyLoadEnabled", v) }),
-        /* @__PURE__ */ jsx(Checkbox, { label: "Delay JS", checked: s.delayJsEnabled, onChange: (v) => save("delayJsEnabled", v) }),
-        /* @__PURE__ */ jsx(Checkbox, { label: "DNS Prefetch", checked: s.dnsPrefetchEnabled, onChange: (v) => save("dnsPrefetchEnabled", v) }),
-        /* @__PURE__ */ jsx(Checkbox, { label: "Preconnect", checked: s.preconnectEnabled, onChange: (v) => save("preconnectEnabled", v) }),
-        /* @__PURE__ */ jsx(Checkbox, { label: "Font Optimization", checked: s.fontOptimization, onChange: (v) => save("fontOptimization", v) })
-      ] }) }) }),
-      /* @__PURE__ */ jsx(Layout.Section, { variant: "oneHalf", children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
-        /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Módulos" }),
-        /* @__PURE__ */ jsx(Checkbox, { label: "Schema Injection", checked: s.schemaInjection, onChange: (v) => save("schemaInjection", v) }),
-        /* @__PURE__ */ jsx(Checkbox, { label: "Script Manager", checked: s.scriptManagerEnabled, onChange: (v) => save("scriptManagerEnabled", v) }),
-        /* @__PURE__ */ jsx(Checkbox, { label: "Redirect Manager", checked: s.redirectManagerEnabled, onChange: (v) => save("redirectManagerEnabled", v) })
-      ] }) }) })
-    ] }),
-    /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "200", children: [
-      /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Theme App Extension" }),
-      /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", children: "Ative os App Embeds em Online Store → Themes → Customize → App embeds: Dreams SEO Pro Scripts, Schema, Performance e Resource Hints." })
-    ] }) })
-  ] }) });
-}
-const route12 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const route6 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  action: action$5,
-  default: Settings,
-  loader: loader$8
-}, Symbol.toStringTag, { value: "Module" }));
-const PIXEL_TEMPLATES = {
-  meta_pixel: {
-    name: "Meta Pixel",
-    type: "pixel",
-    placement: "head",
-    content: `<!-- Meta Pixel -->
-<script>
-!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
-document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', '{{PIXEL_ID}}');
-fbq('track', 'PageView');
-<\/script>`
-  },
-  ga4: {
-    name: "Google Analytics 4",
-    type: "javascript",
-    placement: "head",
-    content: `<!-- Google Analytics 4 -->
-<script async src="https://www.googletagmanager.com/gtag/js?id={{MEASUREMENT_ID}}"><\/script>
-<script>
-window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
-gtag('js',new Date());gtag('config','{{MEASUREMENT_ID}}');
-<\/script>`
-  },
-  gtm: {
-    name: "Google Tag Manager",
-    type: "html",
-    placement: "body_start",
-    content: `<!-- Google Tag Manager -->
-<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-})(window,document,'script','dataLayer','{{CONTAINER_ID}}');<\/script>`
-  },
-  tiktok: {
-    name: "TikTok Pixel",
-    type: "pixel",
-    placement: "head",
-    content: `<!-- TikTok Pixel -->
-<script>
-!function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.load=function(e,n){var i="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=i,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};var o=document.createElement("script");o.type="text/javascript",o.async=!0,o.src=i+"?sdkid="+e+"&lib="+t;var a=document.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)};
-ttq.load('{{PIXEL_ID}}');ttq.page();}(window,document,'ttq');
-<\/script>`
-  },
-  pinterest: {
-    name: "Pinterest Pixel",
-    type: "pixel",
-    placement: "head",
-    content: `<!-- Pinterest Tag -->
-<script>
-!function(e){if(!window.pintrk){window.pintrk=function(){window.pintrk.queue.push(Array.prototype.slice.call(arguments))};var n=window.pintrk;n.queue=[],n.version="3.0";var t=document.createElement("script");t.async=!0,t.src=e;var r=document.getElementsByTagName("script")[0];r.parentNode.insertBefore(t,r)}}("https://s.pinimg.com/ct/core.js");
-pintrk('load','{{TAG_ID}}');pintrk('page');
-<\/script>`
-  },
-  clarity: {
-    name: "Microsoft Clarity",
-    type: "javascript",
-    placement: "head",
-    content: `<!-- Microsoft Clarity -->
-<script type="text/javascript">
-(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-})(window,document,"clarity","script","{{PROJECT_ID}}");
-<\/script>`
-  },
-  snapchat: {
-    name: "Snapchat Pixel",
-    type: "pixel",
-    placement: "head",
-    content: `<!-- Snapchat Pixel -->
-<script type='text/javascript'>
-(function(e,t,n){if(e.snaptr)return;var a=e.snaptr=function(){a.handleRequest?a.handleRequest.apply(a,arguments):a.queue.push(arguments)};a.queue=[];var s='script';r=t.createElement(s);r.async=!0;r.src=n;var u=t.getElementsByTagName(s)[0];u.parentNode.insertBefore(r,u);})(window,document,'https://sc-static.net/scevent.min.js');
-snaptr('init','{{PIXEL_ID}}');snaptr('track','PAGE_VIEW');
-<\/script>`
-  }
-};
-const SCHEMA_TYPES = [
-  { type: "Product", label: "Product", description: "Schema para páginas de produto" },
-  { type: "FAQPage", label: "FAQ", description: "Schema para perguntas frequentes" },
-  { type: "Organization", label: "Organization", description: "Schema da organização/loja" },
-  { type: "BreadcrumbList", label: "Breadcrumb", description: "Schema de navegação breadcrumb" },
-  { type: "Article", label: "Article", description: "Schema para artigos de blog" },
-  { type: "CollectionPage", label: "Collection", description: "Schema para coleções" }
-];
-const DELAY_JS_TARGETS = [
-  "analytics",
-  "hotjar",
-  "clarity",
-  "facebook_pixel",
-  "tiktok_pixel",
-  "pinterest_pixel",
-  "custom"
-];
-const NAV_ITEMS = [
-  { label: "Dashboard", url: "/app", icon: "HomeIcon" },
-  { label: "SEO Audit", url: "/app/seo-audit", icon: "SearchIcon" },
-  { label: "Products SEO", url: "/app/products-seo", icon: "ProductIcon" },
-  { label: "Collections SEO", url: "/app/collections-seo", icon: "CollectionIcon" },
-  { label: "Pages SEO", url: "/app/pages-seo", icon: "PageIcon" },
-  { label: "Blog SEO", url: "/app/blog-seo", icon: "BlogIcon" },
-  { label: "Images", url: "/app/images", icon: "ImageIcon" },
-  { label: "Performance", url: "/app/performance", icon: "GaugeIcon" },
-  { label: "Cache", url: "/app/cache", icon: "DatabaseIcon" },
-  { label: "Script Manager", url: "/app/scripts", icon: "CodeIcon" },
-  { label: "Theme Audit", url: "/app/theme-audit", icon: "ThemeIcon" },
-  { label: "Schema", url: "/app/schema", icon: "SchemaIcon" },
-  { label: "Broken Links", url: "/app/broken-links", icon: "LinkIcon" },
-  { label: "Redirects", url: "/app/redirects", icon: "RedirectIcon" },
-  { label: "Settings", url: "/app/settings", icon: "SettingsIcon" }
-];
-const loader$7 = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const scripts = await prisma.managedScript.findMany({
-    where: { shop: session.shop },
-    orderBy: { priority: "desc" }
-  });
-  return { scripts };
-};
-const action$4 = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const formData = await request.formData();
-  const intent = formData.get("intent");
-  if (intent === "create") {
-    await prisma.managedScript.create({
-      data: {
-        shop: session.shop,
-        name: formData.get("name"),
-        scriptType: formData.get("scriptType"),
-        placement: formData.get("placement"),
-        content: formData.get("content"),
-        displayRule: formData.get("displayRule"),
-        includeUrls: formData.get("includeUrls") || null,
-        excludeUrls: formData.get("excludeUrls") || null
-      }
-    });
-  }
-  if (intent === "toggle") {
-    const id = formData.get("id");
-    const script = await prisma.managedScript.findUnique({ where: { id } });
-    if (script) {
-      await prisma.managedScript.update({
-        where: { id },
-        data: { enabled: !script.enabled }
-      });
-    }
-  }
-  if (intent === "delete") {
-    await prisma.managedScript.delete({ where: { id: formData.get("id") } });
-  }
-  if (intent === "add_pixel") {
-    const templateKey = formData.get("template");
-    const template = PIXEL_TEMPLATES[templateKey];
-    if (template) {
-      await prisma.managedScript.create({
-        data: {
-          shop: session.shop,
-          name: template.name,
-          scriptType: template.type,
-          placement: template.placement,
-          content: template.content,
-          displayRule: "all"
-        }
-      });
-    }
-  }
-  return { success: true };
-};
-function ScriptManager() {
-  var _a2, _b;
-  const { scripts } = useLoaderData();
-  const fetcher = useFetcher();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedTab, setSelectedTab] = useState(0);
-  const [form, setForm] = useState({
-    name: "",
-    scriptType: "javascript",
-    placement: "body_end",
-    content: "",
-    displayRule: "all",
-    includeUrls: "",
-    excludeUrls: ""
-  });
-  const rows = scripts.map((s) => [
-    s.name,
-    s.scriptType,
-    s.placement,
-    s.displayRule,
-    /* @__PURE__ */ jsx(Badge, { tone: s.enabled ? "success" : void 0, children: s.enabled ? "Ativo" : "Inativo" }, s.id),
-    /* @__PURE__ */ jsx(Button, { size: "slim", onClick: () => fetcher.submit({ intent: "toggle", id: s.id }, { method: "POST" }), children: s.enabled ? "Desativar" : "Ativar" }, `toggle-${s.id}`)
-  ]);
-  const pixelTabs = Object.entries(PIXEL_TEMPLATES).map(([key, t]) => ({
-    id: key,
-    content: t.name,
-    panelID: key
-  }));
-  return /* @__PURE__ */ jsxs(
-    Page,
-    {
-      title: "Script Manager",
-      subtitle: "Gerenciador interno de scripts, pixels e tags",
-      primaryAction: { content: "Novo Script", onAction: () => setModalOpen(true) },
-      children: [
-        /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-          ((_a2 = fetcher.data) == null ? void 0 : _a2.success) && /* @__PURE__ */ jsx(Banner, { tone: "success", children: "Operação realizada!" }),
-          /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Tabs, { tabs: pixelTabs, selected: selectedTab, onSelect: setSelectedTab, children: /* @__PURE__ */ jsxs(BlockStack, { gap: "300", children: [
-            /* @__PURE__ */ jsx(Banner, { tone: "info", children: "Templates prontos para pixels. Configure o ID no conteúdo do script após adicionar." }),
-            /* @__PURE__ */ jsxs(
-              Button,
-              {
-                onClick: () => fetcher.submit(
-                  { intent: "add_pixel", template: pixelTabs[selectedTab].id },
-                  { method: "POST" }
-                ),
-                children: [
-                  "Adicionar ",
-                  (_b = pixelTabs[selectedTab]) == null ? void 0 : _b.content
-                ]
-              }
-            )
-          ] }) }) }),
-          /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(
-            DataTable,
-            {
-              columnContentTypes: ["text", "text", "text", "text", "text", "text"],
-              headings: ["Nome", "Tipo", "Posição", "Regra", "Status", "Ação"],
-              rows
-            }
-          ) })
-        ] }),
-        /* @__PURE__ */ jsx(
-          Modal,
-          {
-            open: modalOpen,
-            onClose: () => setModalOpen(false),
-            title: "Novo Script",
-            primaryAction: {
-              content: "Salvar",
-              onAction: () => {
-                fetcher.submit({ intent: "create", ...form }, { method: "POST" });
-                setModalOpen(false);
-              }
-            },
-            children: /* @__PURE__ */ jsx(Modal.Section, { children: /* @__PURE__ */ jsxs(FormLayout, { children: [
-              /* @__PURE__ */ jsx(TextField, { label: "Nome", value: form.name, onChange: (v) => setForm({ ...form, name: v }), autoComplete: "off" }),
-              /* @__PURE__ */ jsx(
-                Select,
-                {
-                  label: "Tipo",
-                  options: [
-                    { label: "HTML", value: "html" },
-                    { label: "CSS", value: "css" },
-                    { label: "JavaScript", value: "javascript" },
-                    { label: "JSON-LD", value: "json_ld" },
-                    { label: "Pixel", value: "pixel" }
-                  ],
-                  value: form.scriptType,
-                  onChange: (v) => setForm({ ...form, scriptType: v })
-                }
-              ),
-              /* @__PURE__ */ jsx(
-                Select,
-                {
-                  label: "Posição",
-                  options: [
-                    { label: "Header (<head>)", value: "head" },
-                    { label: "Body Start", value: "body_start" },
-                    { label: "Body End", value: "body_end" }
-                  ],
-                  value: form.placement,
-                  onChange: (v) => setForm({ ...form, placement: v })
-                }
-              ),
-              /* @__PURE__ */ jsx(
-                Select,
-                {
-                  label: "Regra de exibição",
-                  options: [
-                    { label: "Todas as páginas", value: "all" },
-                    { label: "Homepage", value: "homepage" },
-                    { label: "Produtos", value: "products" },
-                    { label: "Coleções", value: "collections" },
-                    { label: "Blog", value: "blog" },
-                    { label: "URLs específicas", value: "specific_urls" }
-                  ],
-                  value: form.displayRule,
-                  onChange: (v) => setForm({ ...form, displayRule: v })
-                }
-              ),
-              /* @__PURE__ */ jsx(TextField, { label: "Conteúdo", value: form.content, onChange: (v) => setForm({ ...form, content: v }), multiline: 6, autoComplete: "off" })
-            ] }) })
-          }
-        )
-      ]
-    }
-  );
-}
-const route13 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
-  __proto__: null,
-  action: action$4,
-  default: ScriptManager,
-  loader: loader$7
+  loader: loader$4
 }, Symbol.toStringTag, { value: "Module" }));
 function MetricsGrid({ metrics }) {
   return /* @__PURE__ */ jsx(Grid, { children: metrics.map((metric) => /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "100", children: [
@@ -2612,100 +2029,10 @@ function HistoryChart({ history }) {
     )
   ] }) });
 }
-async function processAIQuery(shop, question) {
-  const q = question.toLowerCase();
-  const issues = await prisma.auditIssue.findMany({
-    where: { shop, fixed: false },
-    orderBy: { createdAt: "desc" },
-    take: 500
-  });
-  const latestSnapshot = await prisma.auditSnapshot.findFirst({
-    where: { shop },
-    orderBy: { createdAt: "desc" }
-  });
-  const scripts = await prisma.managedScript.findMany({
-    where: { shop, enabled: true }
-  });
-  if (q.includes("pior seo") || q.includes("produtos") && q.includes("seo")) {
-    const productIssues = groupByResource(issues.filter((i) => i.resourceType === "product"));
-    const worst = productIssues.sort((a, b) => b.issues.length - a.issues.length).slice(0, 10);
-    return {
-      answer: worst.length ? `Encontrei ${worst.length} produtos com problemas de SEO. Os piores são: ${worst.map((p) => `"${p.title}" (${p.issues.length} problemas)`).join(", ")}.` : "Todos os produtos analisados estão com SEO adequado.",
-      data: { products: worst }
-    };
-  }
-  if (q.includes("velocidade") || q.includes("performance") || q.includes("homepage")) {
-    const perfScore = (latestSnapshot == null ? void 0 : latestSnapshot.performanceScore) ?? 0;
-    const weight = (latestSnapshot == null ? void 0 : latestSnapshot.estimatedPageWeight) ?? 0;
-    const activeScripts = (latestSnapshot == null ? void 0 : latestSnapshot.activeScripts) ?? scripts.length;
-    return {
-      answer: `A homepage tem score de performance ${perfScore}/100. Peso estimado: ${weight}KB. ${activeScripts} scripts ativos. Recomendações: ative lazy load, delay JS para analytics, e resource hints nível 2.`,
-      data: { performanceScore: perfScore, pageWeight: weight, activeScripts }
-    };
-  }
-  if (q.includes("meta description") || q.includes("descrição")) {
-    const missing = issues.filter((i) => i.issueType === "missing_meta_description");
-    const byType = {
-      products: missing.filter((i) => i.resourceType === "product").length,
-      collections: missing.filter((i) => i.resourceType === "collection").length,
-      pages: missing.filter((i) => i.resourceType === "page").length
-    };
-    return {
-      answer: `${missing.length} recursos sem meta description: ${byType.products} produtos, ${byType.collections} coleções, ${byType.pages} páginas. Use "Correção em Massa" para gerar automaticamente.`,
-      data: { total: missing.length, byType, items: missing.slice(0, 20) }
-    };
-  }
-  if (q.includes("app") && (q.includes("impacto") || q.includes("performance"))) {
-    const impacts = [
-      { name: "Meta Pixel", ms: 120 },
-      { name: "Klaviyo", ms: 90 },
-      { name: "Hotjar", ms: 180 },
-      { name: "Microsoft Clarity", ms: 75 }
-    ];
-    const top = impacts.sort((a, b) => b.ms - a.ms)[0];
-    return {
-      answer: `O app com maior impacto estimado é ${top.name} (~${top.ms}ms). Considere ativar Delay JS para scripts de analytics. Scripts gerenciados ativos: ${scripts.length}.`,
-      data: { impacts, managedScripts: scripts.length }
-    };
-  }
-  if (q.includes("link") && q.includes("quebrado")) {
-    const broken = await prisma.brokenLink.count({ where: { shop, fixed: false } });
-    return {
-      answer: broken ? `${broken} links quebrados detectados. Acesse "Broken Links" para ver detalhes e criar redirects.` : "Nenhum link quebrado detectado na última varredura.",
-      data: { brokenLinks: broken }
-    };
-  }
-  if (q.includes("alt") || q.includes("imagem")) {
-    const missingAlt = issues.filter((i) => i.issueType === "missing_alt");
-    return {
-      answer: `${missingAlt.length} imagens sem texto ALT. Use "Gerar ALT para todas as imagens" na correção em massa.`,
-      data: { count: missingAlt.length, items: missingAlt.slice(0, 15) }
-    };
-  }
-  const seoScore = (latestSnapshot == null ? void 0 : latestSnapshot.seoScore) ?? 0;
-  return {
-    answer: `Score SEO atual: ${seoScore}/100. Total de ${issues.length} problemas pendentes. Pergunte sobre produtos, performance, meta descriptions, apps ou links quebrados.`,
-    data: {
-      seoScore,
-      issueCount: issues.length,
-      snapshot: latestSnapshot
-    }
-  };
-}
-function groupByResource(issues) {
-  const map = /* @__PURE__ */ new Map();
-  for (const issue of issues) {
-    const key = issue.resourceId || issue.resourceTitle || "unknown";
-    const existing = map.get(key) || { title: issue.resourceTitle || key, issues: [] };
-    existing.issues.push(issue);
-    map.set(key, existing);
-  }
-  return Array.from(map.values());
-}
-const loader$6 = async ({ request }) => {
-  const { admin, session } = await authenticate.admin(request);
+const loader$3 = async ({ request }) => {
+  const { session } = await authenticate.admin(request);
   const shop = session.shop;
-  const [latestSnapshot, history, settings] = await Promise.all([
+  const [latestSnapshot, history] = await Promise.all([
     prisma.auditSnapshot.findFirst({
       where: { shop },
       orderBy: { createdAt: "desc" }
@@ -2713,7 +2040,7 @@ const loader$6 = async ({ request }) => {
     getHistoricalScores(shop),
     getOrCreateSettings(shop)
   ]);
-  return {
+  return json({
     snapshot: latestSnapshot,
     history: history.map((h) => ({
       date: new Date(h.createdAt).toLocaleDateString("pt-BR"),
@@ -2721,33 +2048,32 @@ const loader$6 = async ({ request }) => {
       performanceScore: h.performanceScore,
       technicalScore: h.technicalScore,
       optimizationScore: h.optimizationScore
-    })),
-    settings
-  };
+    }))
+  });
 };
-const action$3 = async ({ request }) => {
+const action$1 = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
-  const shop = session.shop;
   const formData = await request.formData();
   const intent = formData.get("intent");
-  if (intent === "run_audit") {
-    const result = await runFullAudit(shop, admin);
-    return { success: true, audit: result.scores };
+  try {
+    if (intent === "run_audit") {
+      const result = await runFullAudit(session.shop, admin);
+      return json({ success: true, audit: result.scores });
+    }
+    return json({ success: false, error: "Ação desconhecida" });
+  } catch (error) {
+    console.error("[run_audit]", error);
+    return json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Erro ao executar auditoria. Tente novamente."
+      },
+      { status: 500 }
+    );
   }
-  if (intent === "bulk_action") {
-    const actionType = formData.get("action");
-    const result = await runBulkAction(shop, admin, actionType);
-    return { success: true, bulk: { action: actionType, updated: result.updated } };
-  }
-  if (intent === "ai_query") {
-    const question = formData.get("question");
-    const result = await processAIQuery(shop, question);
-    return { success: true, ai: result };
-  }
-  return { success: false };
 };
 function Dashboard() {
-  var _a2, _b, _c, _d, _e;
+  var _a2, _b, _c;
   const { snapshot, history } = useLoaderData();
   const fetcher = useFetcher();
   const isLoading = fetcher.state !== "idle";
@@ -2760,7 +2086,7 @@ function Dashboard() {
   const metrics = snapshot ? [
     { label: "Produtos sem SEO", value: snapshot.productsWithoutSeo },
     { label: "Imagens sem ALT", value: snapshot.imagesWithoutAlt },
-    { label: "Meta Descriptions ausentes", value: snapshot.missingMetaDesc },
+    { label: "Meta descriptions ausentes", value: snapshot.missingMetaDesc },
     { label: "Schemas ausentes", value: snapshot.missingSchemas },
     { label: "Links quebrados", value: snapshot.brokenLinks },
     { label: "Scripts ativos", value: snapshot.activeScripts },
@@ -2770,392 +2096,32 @@ function Dashboard() {
   return /* @__PURE__ */ jsx(
     Page,
     {
-      title: "Dashboard",
+      title: "Painel",
       primaryAction: {
-        content: "Executar Auditoria",
+        content: "Executar auditoria",
         loading: isLoading && ((_a2 = fetcher.formData) == null ? void 0 : _a2.get("intent")) === "run_audit",
         onAction: () => fetcher.submit({ intent: "run_audit" }, { method: "POST" })
       },
       children: /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-        !snapshot && /* @__PURE__ */ jsx(Banner, { tone: "info", children: "Execute sua primeira auditoria para ver scores e métricas da loja." }),
-        ((_b = fetcher.data) == null ? void 0 : _b.audit) && /* @__PURE__ */ jsx(Banner, { tone: "success", children: "Auditoria concluída com sucesso!" }),
+        !snapshot && /* @__PURE__ */ jsx(Banner, { tone: "info", children: "Execute sua primeira auditoria para ver os scores e métricas da loja." }),
+        ((_b = fetcher.data) == null ? void 0 : _b.success) && fetcher.data.audit && /* @__PURE__ */ jsx(Banner, { tone: "success", children: "Auditoria concluída com sucesso!" }),
+        ((_c = fetcher.data) == null ? void 0 : _c.error) && /* @__PURE__ */ jsx(Banner, { tone: "critical", children: fetcher.data.error }),
         /* @__PURE__ */ jsxs(Grid, { children: [
-          /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "SEO Score", score: scores.seo }) }),
-          /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Performance Score", score: scores.performance }) }),
-          /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Technical Score", score: scores.technical }) }),
-          /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Optimization Score", score: scores.optimization }) })
+          /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Score SEO", score: scores.seo }) }),
+          /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Performance", score: scores.performance }) }),
+          /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Técnico", score: scores.technical }) }),
+          /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }, children: /* @__PURE__ */ jsx(ScoreCard, { title: "Otimização", score: scores.optimization }) })
         ] }),
         metrics.length > 0 && /* @__PURE__ */ jsx(MetricsGrid, { metrics }),
-        /* @__PURE__ */ jsxs(Layout, { children: [
-          /* @__PURE__ */ jsx(Layout.Section, { children: /* @__PURE__ */ jsx(HistoryChart, { history }) }),
-          /* @__PURE__ */ jsx(Layout.Section, { variant: "oneThird", children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
-            /* @__PURE__ */ jsx(
-              BulkActionsPanel,
-              {
-                loading: isLoading,
-                lastResult: ((_c = fetcher.data) == null ? void 0 : _c.bulk) || null,
-                onAction: (action2) => fetcher.submit({ intent: "bulk_action", action: action2 }, { method: "POST" })
-              }
-            ),
-            /* @__PURE__ */ jsx(
-              AIAssistantPanel,
-              {
-                loading: isLoading,
-                answer: (_e = (_d = fetcher.data) == null ? void 0 : _d.ai) == null ? void 0 : _e.answer,
-                onAsk: (question) => fetcher.submit({ intent: "ai_query", question }, { method: "POST" })
-              }
-            )
-          ] }) })
-        ] })
+        /* @__PURE__ */ jsx(HistoryChart, { history })
       ] })
     }
   );
 }
-const route14 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
-  __proto__: null,
-  action: action$3,
-  default: Dashboard,
-  loader: loader$6
-}, Symbol.toStringTag, { value: "Module" }));
-const loader$5 = async ({ request }) => {
-  var _a2, _b, _c;
-  const { admin } = await authenticate.admin(request);
-  const response = await admin.graphql(GET_FILES, {
-    variables: { first: 100 }
-  });
-  const json = await response.json();
-  const files = ((_c = (_b = (_a2 = json.data) == null ? void 0 : _a2.files) == null ? void 0 : _b.edges) == null ? void 0 : _c.map((e) => e.node)) || [];
-  let totalSize = 0;
-  let withoutAlt = 0;
-  let largeFiles = 0;
-  const urlCounts = /* @__PURE__ */ new Map();
-  const analyzed = files.map((f) => {
-    var _a3, _b2;
-    const size = ((_a3 = f.originalSource) == null ? void 0 : _a3.fileSize) || 0;
-    totalSize += size;
-    if (!f.alt) withoutAlt++;
-    if (size > 2e5) largeFiles++;
-    const url = ((_b2 = f.image) == null ? void 0 : _b2.url) || "";
-    urlCounts.set(url, (urlCounts.get(url) || 0) + 1);
-    const issues = [];
-    if (!f.alt) issues.push("Sem ALT");
-    if (size > 2e5) issues.push("Arquivo grande");
-    if (urlCounts.get(url) > 1) issues.push("Possível duplicata");
-    const filename = url.split("/").pop() || "";
-    const seoName = generateSeoFilename(filename.replace(/\.[^.]+$/, ""));
-    return { id: f.id, url, alt: f.alt, size, issues, seoName };
-  });
-  const duplicates = analyzed.filter((f) => f.issues.includes("Possível duplicata")).length;
-  return {
-    files: analyzed,
-    stats: {
-      total: files.length,
-      totalSizeKb: Math.round(totalSize / 1024),
-      withoutAlt,
-      largeFiles,
-      duplicates,
-      potentialSavingsKb: Math.round(largeFiles * 50)
-    }
-  };
-};
-const action$2 = async ({ request }) => {
-  const { admin, session } = await authenticate.admin(request);
-  const result = await runBulkAction(session.shop, admin, "generate_alt");
-  return { updated: result.updated };
-};
-function Images() {
-  var _a2;
-  const { files, stats } = useLoaderData();
-  const fetcher = useFetcher();
-  const rows = files.slice(0, 30).map((f) => {
-    var _a3;
-    return [
-      ((_a3 = f.url.split("/").pop()) == null ? void 0 : _a3.slice(0, 30)) || "—",
-      f.alt || /* @__PURE__ */ jsx(Badge, { tone: "critical", children: "Ausente" }),
-      `${Math.round(f.size / 1024)} KB`,
-      f.issues.join(", ") || "OK",
-      f.seoName
-    ];
-  });
-  return /* @__PURE__ */ jsx(
-    Page,
-    {
-      title: "Image Optimizer",
-      subtitle: "Escaneamento de mídia da Shopify",
-      primaryAction: {
-        content: "Gerar ALT em massa",
-        loading: fetcher.state !== "idle",
-        onAction: () => fetcher.submit({}, { method: "POST" })
-      },
-      children: /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-        ((_a2 = fetcher.data) == null ? void 0 : _a2.updated) !== void 0 && /* @__PURE__ */ jsxs(Banner, { tone: "success", children: [
-          fetcher.data.updated,
-          " imagens atualizadas com ALT."
-        ] }),
-        /* @__PURE__ */ jsx(Grid, { children: [
-          { label: "Total de imagens", value: stats.total },
-          { label: "Peso total", value: `${stats.totalSizeKb} KB` },
-          { label: "Sem ALT", value: stats.withoutAlt },
-          { label: "Arquivos grandes", value: stats.largeFiles },
-          { label: "Duplicatas", value: stats.duplicates },
-          { label: "Economia potencial", value: `${stats.potentialSavingsKb} KB` }
-        ].map((s) => /* @__PURE__ */ jsx(Grid.Cell, { columnSpan: { xs: 6, sm: 4, md: 4, lg: 4, xl: 4 }, children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "100", children: [
-          /* @__PURE__ */ jsx(Text, { as: "p", variant: "bodySm", tone: "subdued", children: s.label }),
-          /* @__PURE__ */ jsx(Text, { as: "p", variant: "headingLg", fontWeight: "bold", children: s.value })
-        ] }) }) }, s.label)) }),
-        /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(
-          DataTable,
-          {
-            columnContentTypes: ["text", "text", "numeric", "text", "text"],
-            headings: ["Arquivo", "ALT", "Tamanho", "Problemas", "Nome SEO sugerido"],
-            rows
-          }
-        ) })
-      ] })
-    }
-  );
-}
-const route15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
-  __proto__: null,
-  action: action$2,
-  default: Images,
-  loader: loader$5
-}, Symbol.toStringTag, { value: "Module" }));
-const loader$4 = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const configs = await prisma.schemaConfig.findMany({
-    where: { shop: session.shop }
-  });
-  const schemas = SCHEMA_TYPES.map((s) => {
-    const config = configs.find((c) => c.schemaType === s.type);
-    return {
-      type: s.type,
-      label: s.label,
-      description: s.description,
-      status: (config == null ? void 0 : config.status) || "absent",
-      enabled: (config == null ? void 0 : config.enabled) || false,
-      id: config == null ? void 0 : config.id
-    };
-  });
-  return { schemas };
-};
-const action$1 = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const formData = await request.formData();
-  const schemaType = formData.get("schemaType");
-  const enabled = formData.get("enabled") === "true";
-  await prisma.schemaConfig.upsert({
-    where: { shop_schemaType: { shop: session.shop, schemaType } },
-    create: {
-      shop: session.shop,
-      schemaType,
-      enabled,
-      status: enabled ? "installed" : "absent"
-    },
-    update: { enabled, status: enabled ? "installed" : "absent" }
-  });
-  return { success: true };
-};
-const statusBadge = (status) => {
-  switch (status) {
-    case "installed":
-      return /* @__PURE__ */ jsx(Badge, { tone: "success", children: "Instalado" });
-    case "invalid":
-      return /* @__PURE__ */ jsx(Badge, { tone: "critical", children: "Inválido" });
-    default:
-      return /* @__PURE__ */ jsx(Badge, { tone: "warning", children: "Ausente" });
-  }
-};
-function SchemaManager() {
-  var _a2;
-  const { schemas } = useLoaderData();
-  const fetcher = useFetcher();
-  const rows = schemas.map((s) => [
-    s.label,
-    s.description,
-    statusBadge(s.enabled ? "installed" : s.status),
-    /* @__PURE__ */ jsx(
-      "button",
-      {
-        type: "button",
-        onClick: () => fetcher.submit(
-          { schemaType: s.type, enabled: String(!s.enabled) },
-          { method: "POST" }
-        ),
-        style: { background: "none", border: "1px solid #ccc", padding: "4px 12px", borderRadius: 4, cursor: "pointer" },
-        children: s.enabled ? "Desativar" : "Ativar via App Embed"
-      },
-      s.type
-    )
-  ]);
-  return /* @__PURE__ */ jsx(Page, { title: "Schema Manager", children: /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-    /* @__PURE__ */ jsx(Banner, { tone: "info", children: "Schemas são injetados via Theme App Extension, sem modificar arquivos do tema." }),
-    ((_a2 = fetcher.data) == null ? void 0 : _a2.success) && /* @__PURE__ */ jsx(Banner, { tone: "success", children: "Schema atualizado!" }),
-    /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "300", children: [
-      /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", children: "Tipos suportados: Product, FAQ, Organization, Breadcrumb, Article, Collection" }),
-      /* @__PURE__ */ jsx(
-        DataTable,
-        {
-          columnContentTypes: ["text", "text", "text", "text"],
-          headings: ["Schema", "Descrição", "Status", "Ação"],
-          rows
-        }
-      )
-    ] }) })
-  ] }) });
-}
-const route16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const route7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   action: action$1,
-  default: SchemaManager,
-  loader: loader$4
-}, Symbol.toStringTag, { value: "Module" }));
-const loader$3 = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const settings = await getOrCreateSettings(session.shop);
-  return { settings };
-};
-const action = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
-  const formData = await request.formData();
-  const settings = await prisma.shopSettings.update({
-    where: { shop: session.shop },
-    data: {
-      lazyLoadEnabled: formData.get("lazyLoadEnabled") === "true",
-      delayJsEnabled: formData.get("delayJsEnabled") === "true",
-      dnsPrefetchEnabled: formData.get("dnsPrefetchEnabled") === "true",
-      preconnectEnabled: formData.get("preconnectEnabled") === "true",
-      preloadEnabled: formData.get("preloadEnabled") === "true",
-      prefetchEnabled: formData.get("prefetchEnabled") === "true",
-      fontOptimization: formData.get("fontOptimization") === "true",
-      resourceHintsLevel: parseInt(formData.get("resourceHintsLevel")) || 1,
-      delayJsTrigger: formData.get("delayJsTrigger") || "scroll"
-    }
-  });
-  return { success: true, settings };
-};
-function Cache() {
-  var _a2, _b;
-  const { settings } = useLoaderData();
-  const fetcher = useFetcher();
-  const s = ((_a2 = fetcher.data) == null ? void 0 : _a2.settings) || settings;
-  const hintLevels = [
-    { label: "Nível 1 — Apenas preconnect", value: "1" },
-    { label: "Nível 2 — Preconnect + Preload", value: "2" },
-    { label: "Nível 3 — Preconnect + Preload + Prefetch", value: "3" }
-  ];
-  const save = (updates) => {
-    const data = {
-      lazyLoadEnabled: s.lazyLoadEnabled,
-      delayJsEnabled: s.delayJsEnabled,
-      dnsPrefetchEnabled: s.dnsPrefetchEnabled,
-      preconnectEnabled: s.preconnectEnabled,
-      preloadEnabled: s.preloadEnabled,
-      prefetchEnabled: s.prefetchEnabled,
-      fontOptimization: s.fontOptimization,
-      resourceHintsLevel: String(s.resourceHintsLevel),
-      delayJsTrigger: s.delayJsTrigger,
-      ...updates
-    };
-    fetcher.submit(data, { method: "POST" });
-  };
-  return /* @__PURE__ */ jsx(Page, { title: "Cache Engine", children: /* @__PURE__ */ jsxs(BlockStack, { gap: "500", children: [
-    /* @__PURE__ */ jsx(Banner, { tone: "info", children: "A Shopify possui CDN próprio. Este módulo otimiza browser cache, resource hints, fontes, lazy load e delay JS via Theme App Extension — sem cache HTML tradicional." }),
-    ((_b = fetcher.data) == null ? void 0 : _b.success) && /* @__PURE__ */ jsx(Banner, { tone: "success", children: "Configurações salvas!" }),
-    /* @__PURE__ */ jsxs(Layout, { children: [
-      /* @__PURE__ */ jsx(Layout.Section, { children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
-        /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Resource Hints" }),
-        /* @__PURE__ */ jsx(
-          Select,
-          {
-            label: "Nível de Resource Hints",
-            options: hintLevels,
-            value: String(s.resourceHintsLevel),
-            onChange: (v) => save({ resourceHintsLevel: v })
-          }
-        ),
-        /* @__PURE__ */ jsx(
-          Checkbox,
-          {
-            label: "DNS Prefetch",
-            checked: s.dnsPrefetchEnabled,
-            onChange: (v) => save({ dnsPrefetchEnabled: v })
-          }
-        ),
-        /* @__PURE__ */ jsx(
-          Checkbox,
-          {
-            label: "Preconnect",
-            checked: s.preconnectEnabled,
-            onChange: (v) => save({ preconnectEnabled: v })
-          }
-        )
-      ] }) }) }),
-      /* @__PURE__ */ jsx(Layout.Section, { variant: "oneHalf", children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
-        /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Lazy Load Manager" }),
-        /* @__PURE__ */ jsx(
-          Checkbox,
-          {
-            label: "Ativar Lazy Load (imagens, iframes, vídeos)",
-            checked: s.lazyLoadEnabled,
-            onChange: (v) => save({ lazyLoadEnabled: v })
-          }
-        )
-      ] }) }) }),
-      /* @__PURE__ */ jsx(Layout.Section, { variant: "oneHalf", children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
-        /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Delay JavaScript" }),
-        /* @__PURE__ */ jsx(
-          Checkbox,
-          {
-            label: "Ativar Delay JS",
-            checked: s.delayJsEnabled,
-            onChange: (v) => save({ delayJsEnabled: v })
-          }
-        ),
-        /* @__PURE__ */ jsx(
-          Select,
-          {
-            label: "Executar após",
-            options: [
-              { label: "Scroll", value: "scroll" },
-              { label: "Clique", value: "click" },
-              { label: "Interação", value: "interaction" }
-            ],
-            value: s.delayJsTrigger,
-            onChange: (v) => save({ delayJsTrigger: v })
-          }
-        ),
-        /* @__PURE__ */ jsx(List, { type: "bullet", children: DELAY_JS_TARGETS.map((t) => /* @__PURE__ */ jsx(List.Item, { children: t.replace(/_/g, " ") }, t)) })
-      ] }) }) }),
-      /* @__PURE__ */ jsx(Layout.Section, { children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "400", children: [
-        /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Font Optimization" }),
-        /* @__PURE__ */ jsx(
-          Checkbox,
-          {
-            label: "Ativar otimização de fontes (font-display: swap + preload)",
-            checked: s.fontOptimization,
-            onChange: (v) => save({ fontOptimization: v })
-          }
-        ),
-        /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", children: "Detecta Google Fonts pesadas e aplica font-display: swap automaticamente." })
-      ] }) }) }),
-      /* @__PURE__ */ jsx(Layout.Section, { children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsxs(BlockStack, { gap: "300", children: [
-        /* @__PURE__ */ jsx(Text, { as: "h3", variant: "headingMd", children: "Critical Resources" }),
-        /* @__PURE__ */ jsx(Text, { as: "p", tone: "subdued", children: "Recomendações geradas com base no tema ativo:" }),
-        /* @__PURE__ */ jsxs(List, { type: "bullet", children: [
-          /* @__PURE__ */ jsx(List.Item, { children: "Preload da imagem hero above-the-fold" }),
-          /* @__PURE__ */ jsx(List.Item, { children: "Preconnect para CDN de fontes e analytics" }),
-          /* @__PURE__ */ jsx(List.Item, { children: "Defer em scripts não-críticos via Delay JS" }),
-          /* @__PURE__ */ jsx(List.Item, { children: "Lazy load para imagens abaixo da dobra" })
-        ] })
-      ] }) }) })
-    ] })
-  ] }) });
-}
-const route17 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
-  __proto__: null,
-  action,
-  default: Cache,
+  default: Dashboard,
   loader: loader$3
 }, Symbol.toStringTag, { value: "Module" }));
 const loader$2 = async ({ request }) => {
@@ -3163,10 +2129,73 @@ const loader$2 = async ({ request }) => {
   if (url.searchParams.get("shop")) {
     throw redirect(`/app?${url.searchParams.toString()}`);
   }
-  return login(request);
+  const errors = await login(request);
+  return json({ errors });
 };
-const route18 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const action = async ({ request }) => {
+  const errors = await login(request);
+  return json({ errors });
+};
+function Index() {
+  const { errors: loaderErrors } = useLoaderData();
+  const actionData = useActionData();
+  const errors = (actionData == null ? void 0 : actionData.errors) ?? loaderErrors;
+  return /* @__PURE__ */ jsxs(
+    "div",
+    {
+      style: {
+        fontFamily: "system-ui, sans-serif",
+        maxWidth: "420px",
+        margin: "4rem auto",
+        padding: "0 1rem"
+      },
+      children: [
+        /* @__PURE__ */ jsx("h1", { style: { fontSize: "1.5rem", marginBottom: "0.5rem" }, children: "Dreams SEO" }),
+        /* @__PURE__ */ jsx("p", { style: { color: "#666", marginBottom: "1.5rem" }, children: "Informe o domínio da loja para acessar o app." }),
+        /* @__PURE__ */ jsxs(Form, { method: "post", children: [
+          /* @__PURE__ */ jsxs("label", { style: { display: "block", marginBottom: "1rem" }, children: [
+            /* @__PURE__ */ jsx("span", { style: { display: "block", marginBottom: "0.25rem", fontWeight: 500 }, children: "Loja Shopify" }),
+            /* @__PURE__ */ jsx(
+              "input",
+              {
+                type: "text",
+                name: "shop",
+                placeholder: "sua-loja.myshopify.com",
+                style: {
+                  width: "100%",
+                  padding: "0.5rem",
+                  border: "1px solid #ccc",
+                  borderRadius: "4px"
+                }
+              }
+            )
+          ] }),
+          (errors == null ? void 0 : errors.shop) === LoginErrorType.MissingShop && /* @__PURE__ */ jsx("p", { style: { color: "#b00020", marginBottom: "1rem" }, children: "Informe o domínio da loja." }),
+          (errors == null ? void 0 : errors.shop) === LoginErrorType.InvalidShop && /* @__PURE__ */ jsx("p", { style: { color: "#b00020", marginBottom: "1rem" }, children: "Domínio inválido. Use o formato sua-loja.myshopify.com" }),
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              type: "submit",
+              style: {
+                padding: "0.5rem 1rem",
+                background: "#008060",
+                color: "#fff",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer"
+              },
+              children: "Entrar"
+            }
+          )
+        ] })
+      ]
+    }
+  );
+}
+const route8 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  action,
+  default: Index,
   loader: loader$2
 }, Symbol.toStringTag, { value: "Module" }));
 const loader$1 = async ({ request }) => {
@@ -3176,11 +2205,15 @@ const loader$1 = async ({ request }) => {
 function Auth() {
   return null;
 }
-const route19 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const route9 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   default: Auth,
   loader: loader$1
 }, Symbol.toStringTag, { value: "Module" }));
+const NAV_ITEMS = [
+  { label: "Otimização", url: "/app/otimizacao" },
+  { label: "Auditoria SEO", url: "/app/seo-audit" }
+];
 const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 const loader = async ({ request }) => {
   await authenticate.admin(request);
@@ -3190,8 +2223,8 @@ function App() {
   const { apiKey } = useLoaderData();
   return /* @__PURE__ */ jsxs(AppProvider, { isEmbeddedApp: true, apiKey, children: [
     /* @__PURE__ */ jsxs(NavMenu, { children: [
-      /* @__PURE__ */ jsx(Link, { to: "/app", rel: "home", children: "Dreams SEO Pro" }),
-      NAV_ITEMS.slice(1).map((item) => /* @__PURE__ */ jsx(Link, { to: item.url, children: item.label }, item.url))
+      /* @__PURE__ */ jsx(Link$1, { to: "/app", rel: "home", children: "Painel" }),
+      NAV_ITEMS.map((item) => /* @__PURE__ */ jsx(Link$1, { to: item.url, children: item.label }, item.url))
     ] }),
     /* @__PURE__ */ jsx(Outlet, {})
   ] });
@@ -3202,7 +2235,7 @@ function ErrorBoundary() {
 const headers = (headersArgs) => {
   return boundary.headers(headersArgs);
 };
-const route20 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const route10 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   ErrorBoundary,
   default: App,
@@ -3210,7 +2243,7 @@ const route20 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.definePrope
   links,
   loader
 }, Symbol.toStringTag, { value: "Module" }));
-const serverManifest = { "entry": { "module": "/assets/entry.client-CMknqDO7.js", "imports": ["/assets/components-CLFESZVD.js"], "css": [] }, "routes": { "root": { "id": "root", "parentId": void 0, "path": "", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": false, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": true, "module": "/assets/root-BfqN5s8q.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/styles-CeHfqj-P.js"], "css": [] }, "routes/webhooks.app.scopes_update": { "id": "routes/webhooks.app.scopes_update", "parentId": "root", "path": "webhooks/app/scopes_update", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": false, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/webhooks.app.scopes_update-l0sNRNKZ.js", "imports": [], "css": [] }, "routes/webhooks.app.uninstalled": { "id": "routes/webhooks.app.uninstalled", "parentId": "root", "path": "webhooks/app/uninstalled", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": false, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/webhooks.app.uninstalled-l0sNRNKZ.js", "imports": [], "css": [] }, "routes/app.collections-seo": { "id": "routes/app.collections-seo", "parentId": "routes/app", "path": "collections-seo", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.collections-seo-DIxjF8cD.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/IssuesTable-BCcvhJp3.js", "/assets/ScoreCard-Voa3j3Ro.js", "/assets/Page-DD2LAk_5.js", "/assets/Grid-DS-mA30M.js", "/assets/DataTable-B7gHzMx8.js", "/assets/context-BOEdkLCB.js", "/assets/CSSTransition-DEIVm2wG.js"], "css": [] }, "routes/app.broken-links": { "id": "routes/app.broken-links", "parentId": "routes/app", "path": "broken-links", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.broken-links-uLSLXfhn.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/Page-DD2LAk_5.js", "/assets/Banner-DSI8p3T8.js", "/assets/DataTable-B7gHzMx8.js", "/assets/context-BOEdkLCB.js"], "css": [] }, "routes/app.products-seo": { "id": "routes/app.products-seo", "parentId": "routes/app", "path": "products-seo", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.products-seo-CEI4ecWH.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/IssuesTable-BCcvhJp3.js", "/assets/ScoreCard-Voa3j3Ro.js", "/assets/Page-DD2LAk_5.js", "/assets/Grid-DS-mA30M.js", "/assets/DataTable-B7gHzMx8.js", "/assets/context-BOEdkLCB.js", "/assets/CSSTransition-DEIVm2wG.js"], "css": [] }, "routes/app.performance": { "id": "routes/app.performance", "parentId": "routes/app", "path": "performance", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.performance-D1Yujoh9.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/Page-DD2LAk_5.js", "/assets/Banner-DSI8p3T8.js", "/assets/Grid-DS-mA30M.js", "/assets/DataTable-B7gHzMx8.js", "/assets/context-BOEdkLCB.js"], "css": [] }, "routes/app.theme-audit": { "id": "routes/app.theme-audit", "parentId": "routes/app", "path": "theme-audit", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.theme-audit-B4hX-S-8.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/Page-DD2LAk_5.js", "/assets/Grid-DS-mA30M.js", "/assets/List-pElO3EjF.js", "/assets/DataTable-B7gHzMx8.js", "/assets/Banner-DSI8p3T8.js", "/assets/context-BOEdkLCB.js"], "css": [] }, "routes/app.pages-seo": { "id": "routes/app.pages-seo", "parentId": "routes/app", "path": "pages-seo", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.pages-seo-DShsOFQD.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/IssuesTable-BCcvhJp3.js", "/assets/ScoreCard-Voa3j3Ro.js", "/assets/Page-DD2LAk_5.js", "/assets/Grid-DS-mA30M.js", "/assets/DataTable-B7gHzMx8.js", "/assets/context-BOEdkLCB.js", "/assets/CSSTransition-DEIVm2wG.js"], "css": [] }, "routes/app.redirects": { "id": "routes/app.redirects", "parentId": "routes/app", "path": "redirects", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.redirects-bjI3IvRY.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/Page-DD2LAk_5.js", "/assets/Banner-DSI8p3T8.js", "/assets/DataTable-B7gHzMx8.js", "/assets/Modal-hiFJTAoT.js", "/assets/Select-i8UvgvCB.js", "/assets/context-BOEdkLCB.js", "/assets/context-CTnnmAZq.js", "/assets/CSSTransition-DEIVm2wG.js"], "css": [] }, "routes/app.seo-audit": { "id": "routes/app.seo-audit", "parentId": "routes/app", "path": "seo-audit", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.seo-audit-DEn7zil6.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/ScoreCard-Voa3j3Ro.js", "/assets/IssuesTable-BCcvhJp3.js", "/assets/BulkActions-C0szGupf.js", "/assets/Page-DD2LAk_5.js", "/assets/Banner-DSI8p3T8.js", "/assets/Grid-DS-mA30M.js", "/assets/Layout-BUIf8GAU.js", "/assets/context-BOEdkLCB.js", "/assets/CSSTransition-DEIVm2wG.js", "/assets/DataTable-B7gHzMx8.js"], "css": [] }, "routes/app.blog-seo": { "id": "routes/app.blog-seo", "parentId": "routes/app", "path": "blog-seo", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.blog-seo-ByKT84-K.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/IssuesTable-BCcvhJp3.js", "/assets/ScoreCard-Voa3j3Ro.js", "/assets/Page-DD2LAk_5.js", "/assets/Grid-DS-mA30M.js", "/assets/DataTable-B7gHzMx8.js", "/assets/context-BOEdkLCB.js", "/assets/CSSTransition-DEIVm2wG.js"], "css": [] }, "routes/app.settings": { "id": "routes/app.settings", "parentId": "routes/app", "path": "settings", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.settings-B9fQfRbB.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/Page-DD2LAk_5.js", "/assets/Banner-DSI8p3T8.js", "/assets/Layout-BUIf8GAU.js", "/assets/Checkbox-CQQ1_5J2.js", "/assets/context-BOEdkLCB.js"], "css": [] }, "routes/app.scripts": { "id": "routes/app.scripts", "parentId": "routes/app", "path": "scripts", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.scripts-qd7ePQzE.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/constants-DcaPgTjd.js", "/assets/Page-DD2LAk_5.js", "/assets/Banner-DSI8p3T8.js", "/assets/context-BOEdkLCB.js", "/assets/Modal-hiFJTAoT.js", "/assets/DataTable-B7gHzMx8.js", "/assets/Select-i8UvgvCB.js", "/assets/context-CTnnmAZq.js", "/assets/CSSTransition-DEIVm2wG.js"], "css": [] }, "routes/app._index": { "id": "routes/app._index", "parentId": "routes/app", "path": void 0, "index": true, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app._index-DCQr6d7X.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/ScoreCard-Voa3j3Ro.js", "/assets/Grid-DS-mA30M.js", "/assets/Page-DD2LAk_5.js", "/assets/DataTable-B7gHzMx8.js", "/assets/BulkActions-C0szGupf.js", "/assets/Banner-DSI8p3T8.js", "/assets/Layout-BUIf8GAU.js", "/assets/context-BOEdkLCB.js", "/assets/CSSTransition-DEIVm2wG.js"], "css": [] }, "routes/app.images": { "id": "routes/app.images", "parentId": "routes/app", "path": "images", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.images-CREOpdjP.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/Page-DD2LAk_5.js", "/assets/Banner-DSI8p3T8.js", "/assets/Grid-DS-mA30M.js", "/assets/DataTable-B7gHzMx8.js", "/assets/context-BOEdkLCB.js"], "css": [] }, "routes/app.schema": { "id": "routes/app.schema", "parentId": "routes/app", "path": "schema", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.schema-T_QTkBY_.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/Page-DD2LAk_5.js", "/assets/Banner-DSI8p3T8.js", "/assets/DataTable-B7gHzMx8.js", "/assets/context-BOEdkLCB.js"], "css": [] }, "routes/app.cache": { "id": "routes/app.cache", "parentId": "routes/app", "path": "cache", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.cache-D_qHZQXc.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/constants-DcaPgTjd.js", "/assets/Page-DD2LAk_5.js", "/assets/Banner-DSI8p3T8.js", "/assets/Layout-BUIf8GAU.js", "/assets/Select-i8UvgvCB.js", "/assets/Checkbox-CQQ1_5J2.js", "/assets/List-pElO3EjF.js", "/assets/context-BOEdkLCB.js"], "css": [] }, "routes/_index": { "id": "routes/_index", "parentId": "root", "path": void 0, "index": true, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/_index-l0sNRNKZ.js", "imports": [], "css": [] }, "routes/auth.$": { "id": "routes/auth.$", "parentId": "root", "path": "auth/*", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/auth._-CSxRPO1x.js", "imports": [], "css": [] }, "routes/app": { "id": "routes/app", "parentId": "root", "path": "app", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": true, "module": "/assets/app-DROlKVu_.js", "imports": ["/assets/components-CLFESZVD.js", "/assets/styles-CeHfqj-P.js", "/assets/context-BOEdkLCB.js", "/assets/context-CTnnmAZq.js", "/assets/constants-DcaPgTjd.js"], "css": [] } }, "url": "/assets/manifest-4ae5fd8a.js", "version": "4ae5fd8a" };
+const serverManifest = { "entry": { "module": "/assets/entry.client-DHYqDkop.js", "imports": ["/assets/components-dsXXdAyd.js"], "css": [] }, "routes": { "root": { "id": "root", "parentId": void 0, "path": "", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": false, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": true, "module": "/assets/root-CWYk2QRg.js", "imports": ["/assets/components-dsXXdAyd.js", "/assets/index-CKvyvi-L.js", "/assets/styles-BXy9s1Pu.js"], "css": [] }, "routes/webhooks.app.scopes_update": { "id": "routes/webhooks.app.scopes_update", "parentId": "root", "path": "webhooks/app/scopes_update", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": false, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/webhooks.app.scopes_update-l0sNRNKZ.js", "imports": [], "css": [] }, "routes/webhooks.app.uninstalled": { "id": "routes/webhooks.app.uninstalled", "parentId": "root", "path": "webhooks/app/uninstalled", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": false, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/webhooks.app.uninstalled-l0sNRNKZ.js", "imports": [], "css": [] }, "routes/app.otimizacao": { "id": "routes/app.otimizacao", "parentId": "routes/app", "path": "otimizacao", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.otimizacao-FW3_ImAU.js", "imports": ["/assets/components-dsXXdAyd.js", "/assets/ProgressBar-C3u_7Nuu.js", "/assets/context-DNyOYiBw.js", "/assets/context-CLTb2Hpw.js", "/assets/Layout-BlY7AXO4.js"], "css": [] }, "routes/app.seo-audit": { "id": "routes/app.seo-audit", "parentId": "routes/app", "path": "seo-audit", "index": void 0, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app.seo-audit-B4Psms-p.js", "imports": ["/assets/components-dsXXdAyd.js", "/assets/ScoreCard-DzyqVeg_.js", "/assets/ProgressBar-C3u_7Nuu.js", "/assets/Layout-BlY7AXO4.js", "/assets/context-DNyOYiBw.js"], "css": [] }, "routes/sitemap[.]xml": { "id": "routes/sitemap[.]xml", "parentId": "root", "path": "sitemap.xml", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/sitemap_._xml-l0sNRNKZ.js", "imports": [], "css": [] }, "routes/robots[.]txt": { "id": "routes/robots[.]txt", "parentId": "root", "path": "robots.txt", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/robots_._txt-l0sNRNKZ.js", "imports": [], "css": [] }, "routes/app._index": { "id": "routes/app._index", "parentId": "routes/app", "path": void 0, "index": true, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/app._index-CCE-Eyr3.js", "imports": ["/assets/components-dsXXdAyd.js", "/assets/ScoreCard-DzyqVeg_.js", "/assets/ProgressBar-C3u_7Nuu.js", "/assets/context-DNyOYiBw.js"], "css": [] }, "routes/_index": { "id": "routes/_index", "parentId": "root", "path": void 0, "index": true, "caseSensitive": void 0, "hasAction": true, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/_index-BcGrwWsa.js", "imports": ["/assets/components-dsXXdAyd.js", "/assets/index-CKvyvi-L.js"], "css": [] }, "routes/auth.$": { "id": "routes/auth.$", "parentId": "root", "path": "auth/*", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": false, "module": "/assets/auth._-CSxRPO1x.js", "imports": [], "css": [] }, "routes/app": { "id": "routes/app", "parentId": "root", "path": "app", "index": void 0, "caseSensitive": void 0, "hasAction": false, "hasLoader": true, "hasClientAction": false, "hasClientLoader": false, "hasErrorBoundary": true, "module": "/assets/app-Ckym0NFr.js", "imports": ["/assets/components-dsXXdAyd.js", "/assets/index-CKvyvi-L.js", "/assets/styles-BXy9s1Pu.js", "/assets/context-DNyOYiBw.js", "/assets/context-CLTb2Hpw.js"], "css": [] } }, "url": "/assets/manifest-ca52f70f.js", "version": "ca52f70f" };
 const mode = "production";
 const assetsBuildDirectory = "build/client";
 const basename = "/";
@@ -3243,61 +2276,13 @@ const routes = {
     caseSensitive: void 0,
     module: route2
   },
-  "routes/app.collections-seo": {
-    id: "routes/app.collections-seo",
+  "routes/app.otimizacao": {
+    id: "routes/app.otimizacao",
     parentId: "routes/app",
-    path: "collections-seo",
+    path: "otimizacao",
     index: void 0,
     caseSensitive: void 0,
     module: route3
-  },
-  "routes/app.broken-links": {
-    id: "routes/app.broken-links",
-    parentId: "routes/app",
-    path: "broken-links",
-    index: void 0,
-    caseSensitive: void 0,
-    module: route4
-  },
-  "routes/app.products-seo": {
-    id: "routes/app.products-seo",
-    parentId: "routes/app",
-    path: "products-seo",
-    index: void 0,
-    caseSensitive: void 0,
-    module: route5
-  },
-  "routes/app.performance": {
-    id: "routes/app.performance",
-    parentId: "routes/app",
-    path: "performance",
-    index: void 0,
-    caseSensitive: void 0,
-    module: route6
-  },
-  "routes/app.theme-audit": {
-    id: "routes/app.theme-audit",
-    parentId: "routes/app",
-    path: "theme-audit",
-    index: void 0,
-    caseSensitive: void 0,
-    module: route7
-  },
-  "routes/app.pages-seo": {
-    id: "routes/app.pages-seo",
-    parentId: "routes/app",
-    path: "pages-seo",
-    index: void 0,
-    caseSensitive: void 0,
-    module: route8
-  },
-  "routes/app.redirects": {
-    id: "routes/app.redirects",
-    parentId: "routes/app",
-    path: "redirects",
-    index: void 0,
-    caseSensitive: void 0,
-    module: route9
   },
   "routes/app.seo-audit": {
     id: "routes/app.seo-audit",
@@ -3305,31 +2290,23 @@ const routes = {
     path: "seo-audit",
     index: void 0,
     caseSensitive: void 0,
-    module: route10
+    module: route4
   },
-  "routes/app.blog-seo": {
-    id: "routes/app.blog-seo",
-    parentId: "routes/app",
-    path: "blog-seo",
+  "routes/sitemap[.]xml": {
+    id: "routes/sitemap[.]xml",
+    parentId: "root",
+    path: "sitemap.xml",
     index: void 0,
     caseSensitive: void 0,
-    module: route11
+    module: route5
   },
-  "routes/app.settings": {
-    id: "routes/app.settings",
-    parentId: "routes/app",
-    path: "settings",
+  "routes/robots[.]txt": {
+    id: "routes/robots[.]txt",
+    parentId: "root",
+    path: "robots.txt",
     index: void 0,
     caseSensitive: void 0,
-    module: route12
-  },
-  "routes/app.scripts": {
-    id: "routes/app.scripts",
-    parentId: "routes/app",
-    path: "scripts",
-    index: void 0,
-    caseSensitive: void 0,
-    module: route13
+    module: route6
   },
   "routes/app._index": {
     id: "routes/app._index",
@@ -3337,31 +2314,7 @@ const routes = {
     path: void 0,
     index: true,
     caseSensitive: void 0,
-    module: route14
-  },
-  "routes/app.images": {
-    id: "routes/app.images",
-    parentId: "routes/app",
-    path: "images",
-    index: void 0,
-    caseSensitive: void 0,
-    module: route15
-  },
-  "routes/app.schema": {
-    id: "routes/app.schema",
-    parentId: "routes/app",
-    path: "schema",
-    index: void 0,
-    caseSensitive: void 0,
-    module: route16
-  },
-  "routes/app.cache": {
-    id: "routes/app.cache",
-    parentId: "routes/app",
-    path: "cache",
-    index: void 0,
-    caseSensitive: void 0,
-    module: route17
+    module: route7
   },
   "routes/_index": {
     id: "routes/_index",
@@ -3369,7 +2322,7 @@ const routes = {
     path: void 0,
     index: true,
     caseSensitive: void 0,
-    module: route18
+    module: route8
   },
   "routes/auth.$": {
     id: "routes/auth.$",
@@ -3377,7 +2330,7 @@ const routes = {
     path: "auth/*",
     index: void 0,
     caseSensitive: void 0,
-    module: route19
+    module: route9
   },
   "routes/app": {
     id: "routes/app",
@@ -3385,7 +2338,7 @@ const routes = {
     path: "app",
     index: void 0,
     caseSensitive: void 0,
-    module: route20
+    module: route10
   }
 };
 export {

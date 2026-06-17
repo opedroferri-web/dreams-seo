@@ -1,288 +1,156 @@
 {% comment %}
-  Dreams SEO — Theme App Extension
-  Lê configurações do app via shop.metafields.dreams_seo.config (sincronizado pelo admin)
+  Dreams SEO — Otimizações fixas de performance.
+  Nenhuma configuração necessária — tudo aplicado automaticamente.
 {% endcomment %}
 
-{% liquid
-  assign ds_lazy = block.settings.lazy_load_enabled
-  assign ds_delay = block.settings.delay_js_enabled
-  assign ds_trigger = 'scroll'
-  assign ds_hints = block.settings.resource_hints_level
-  assign ds_schema = block.settings.schema_enabled
-  assign ds_font = block.settings.font_optimization
-  assign ds_preload = true
-  assign ds_prefetch = false
-  assign ds_dns = true
-  assign ds_preconnect = true
-  assign ds_webp = true
+{% comment %} ── 1. Resource hints ── {% endcomment %}
+<link rel="preconnect" href="https://cdn.shopify.com" crossorigin>
+<link rel="preconnect" href="https://fonts.shopifycdn.com" crossorigin>
+<link rel="dns-prefetch" href="https://cdn.shopify.com">
+<link rel="dns-prefetch" href="https://www.google-analytics.com">
+<link rel="dns-prefetch" href="https://connect.facebook.net">
 
-  assign cfg = shop.metafields.dreams_seo.config.value
-  if cfg != blank
-    if cfg.lazy_load_enabled != nil
-      assign ds_lazy = cfg.lazy_load_enabled
-    endif
-    if cfg.delay_js_enabled != nil
-      assign ds_delay = cfg.delay_js_enabled
-    endif
-    if cfg.delay_js_trigger != blank
-      assign ds_trigger = cfg.delay_js_trigger
-    endif
-    if cfg.resource_hints_level != nil
-      assign ds_hints = cfg.resource_hints_level
-    endif
-    if cfg.schema_enabled != nil
-      assign ds_schema = cfg.schema_enabled
-    endif
-    if cfg.font_optimization != nil
-      assign ds_font = cfg.font_optimization
-    endif
-    if cfg.preload_enabled != nil
-      assign ds_preload = cfg.preload_enabled
-    endif
-    if cfg.prefetch_enabled != nil
-      assign ds_prefetch = cfg.prefetch_enabled
-    endif
-    if cfg.dns_prefetch_enabled != nil
-      assign ds_dns = cfg.dns_prefetch_enabled
-    endif
-    if cfg.preconnect_enabled != nil
-      assign ds_preconnect = cfg.preconnect_enabled
-    endif
-    if cfg.webp_enabled != nil
-      assign ds_webp = cfg.webp_enabled
-    endif
-  endif
-%}
-
-{% if ds_preconnect or ds_dns %}
-  {% if ds_preconnect %}
-    <link rel="preconnect" href="https://cdn.shopify.com" crossorigin>
-    <link rel="preconnect" href="https://fonts.shopifycdn.com" crossorigin>
-  {% endif %}
-  {% if ds_dns %}
-    <link rel="dns-prefetch" href="https://cdn.shopify.com">
-    <link rel="dns-prefetch" href="https://www.google-analytics.com">
-    <link rel="dns-prefetch" href="https://connect.facebook.net">
-  {% endif %}
+{% comment %} ── 2. Preload imagem principal ── {% endcomment %}
+{% if product.featured_image %}
+  <link rel="preload" as="image" href="{{ product.featured_image | image_url: width: 800, format: 'webp' }}" fetchpriority="high">
+{% elsif collection.image %}
+  <link rel="preload" as="image" href="{{ collection.image | image_url: width: 800, format: 'webp' }}" fetchpriority="high">
 {% endif %}
 
-{% if ds_hints >= 2 and ds_preload %}
-  {% if product.featured_image %}
-    <link rel="preload" as="image" href="{{ product.featured_image | image_url: width: 800, format: 'webp' }}">
-  {% elsif collection.image %}
-    <link rel="preload" as="image" href="{{ collection.image | image_url: width: 800, format: 'webp' }}">
-  {% endif %}
-{% endif %}
+{% comment %} ── 3. Font-display: swap ── {% endcomment %}
+<style>@font-face { font-display: swap !important; }</style>
 
-{% if ds_prefetch and ds_hints >= 3 %}
-  <link rel="prefetch" href="{{ routes.root_url }}">
-{% endif %}
-
-{% if ds_font %}
-  <style>
-    @font-face { font-display: swap !important; }
-  </style>
-{% endif %}
-
-{% if ds_schema %}
-  {% if template.name == 'product' and product %}
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "Product",
-      "name": {{ product.title | json }},
-      "description": {{ product.description | strip_html | truncate: 300 | json }},
-      "image": "{{ product.featured_image | image_url: width: 800 }}",
-      "url": "{{ shop.url }}{{ product.url }}",
-      "brand": { "@type": "Brand", "name": {{ shop.name | json }} },
-      "offers": {
-        "@type": "Offer",
-        "priceCurrency": {{ cart.currency.iso_code | json }},
-        "price": "{{ product.price | money_without_currency }}",
-        "availability": "{% if product.available %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}",
-        "url": "{{ shop.url }}{{ product.url }}"
-      }
-    }
-    </script>
-  {% endif %}
+{% comment %} ── 4. Schema JSON-LD ── {% endcomment %}
+{% if template.name == 'product' and product %}
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "Organization",
-    "name": {{ shop.name | json }},
-    "url": "{{ shop.url }}"
+    "@type": "Product",
+    "name": {{ product.title | json }},
+    "description": {{ product.description | strip_html | truncate: 300 | json }},
+    "image": "{{ product.featured_image | image_url: width: 800 }}",
+    "url": "{{ shop.url }}{{ product.url }}",
+    "brand": { "@type": "Brand", "name": {{ shop.name | json }} },
+    "offers": {
+      "@type": "Offer",
+      "priceCurrency": {{ cart.currency.iso_code | json }},
+      "price": "{{ product.price | money_without_currency }}",
+      "availability": "{% if product.available %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}",
+      "url": "{{ shop.url }}{{ product.url }}"
+    }
   }
   </script>
 {% endif %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": {{ shop.name | json }},
+  "url": "{{ shop.url }}"
+}
+</script>
 
-{% comment %} Lazy load e WebP não afetam carrinho nem checkout {% endcomment %}
+{% comment %} ── 5. Lazy load imagens + WebP (ignora carrinho/checkout) ── {% endcomment %}
 {% unless template.name == 'cart' or template.name == 'checkout' %}
+<script defer>
+document.addEventListener('DOMContentLoaded', function() {
+  var IMG_MARGIN = 900;
+  var VID_MARGIN = 1500;
+  var foldLimit = (window.innerHeight || 800) * 1.2;
 
-{% if ds_lazy %}
-  <script defer>
-    document.addEventListener('DOMContentLoaded', function() {
-      var imgMargin = {% if cfg != blank and cfg.lazy_load_margin != nil %}{{ cfg.lazy_load_margin }}{% else %}900{% endif %};
-      var videoMargin = Math.max(imgMargin, 1500);
-      var viewportH = window.innerHeight || 800;
-      var foldLimit = viewportH * 1.2;
+  function playVideo(v) {
+    v.preload = 'auto';
+    if (typeof v.load === 'function') v.load();
+    if (v.hasAttribute('autoplay')) {
+      var p = v.play(); if (p && p.catch) p.catch(function(){});
+    }
+  }
 
-      function playVideo(el) {
-        el.preload = 'auto';
-        if (typeof el.load === 'function') el.load();
-        if (el.hasAttribute('autoplay')) {
-          var p = el.play();
-          if (p && typeof p.catch === 'function') p.catch(function() {});
-        }
-      }
+  function loadEl(el) {
+    if (el.dataset.dsLoaded) return;
+    el.dataset.dsLoaded = '1';
+    if (el.dataset.src) {
+      el.src = el.dataset.src;
+      if (el.tagName === 'VIDEO' && typeof el.load === 'function') el.load();
+    }
+    if (el.tagName === 'VIDEO') playVideo(el);
+    if (el.tagName === 'IMG') { el.loading = 'eager'; el.decoding = 'async'; }
+  }
 
-      function loadMedia(el) {
-        if (el.dataset.dreamsLoaded) return;
-        el.dataset.dreamsLoaded = '1';
-        if (el.dataset.src) {
-          if (el.tagName === 'IMG') el.src = el.dataset.src;
-          else if (el.tagName === 'VIDEO') { el.src = el.dataset.src; }
-          else if (el.tagName === 'IFRAME') el.src = el.dataset.src;
-        }
-        if (el.tagName === 'VIDEO') playVideo(el);
-        if (el.tagName === 'IMG') { el.loading = 'eager'; el.decoding = 'async'; }
-      }
+  var imgs = [], vids = [];
+  document.querySelectorAll('img, video, iframe').forEach(function(el) {
+    var top = el.getBoundingClientRect().top;
+    var autoplay = el.tagName === 'VIDEO' && el.hasAttribute('autoplay');
+    if (top < foldLimit || autoplay) {
+      if (el.tagName === 'IMG') { el.loading = 'eager'; el.fetchPriority = 'high'; }
+      if (el.tagName === 'VIDEO') playVideo(el);
+    } else {
+      if (el.tagName === 'IMG') el.loading = 'lazy';
+      el.decoding = 'async';
+      (el.tagName === 'VIDEO' ? vids : imgs).push(el);
+    }
+  });
 
-      var belowFoldImgs = [];
-      var belowFoldVideos = [];
+  if ('IntersectionObserver' in window) {
+    function makeObserver(list, margin) {
+      if (!list.length) return;
+      var obs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(e) { if (e.isIntersecting) { loadEl(e.target); obs.unobserve(e.target); } });
+      }, { rootMargin: margin + 'px 0px', threshold: 0.01 });
+      list.forEach(function(el) { obs.observe(el); });
+    }
+    makeObserver(imgs, IMG_MARGIN);
+    makeObserver(vids, VID_MARGIN);
+  }
 
-      document.querySelectorAll('img, video, iframe').forEach(function(el) {
-        var rect = el.getBoundingClientRect();
-        var aboveFold = rect.top < foldLimit;
-        var isAutoplay = el.tagName === 'VIDEO' && el.hasAttribute('autoplay');
+  var all = imgs.concat(vids);
+  setTimeout(function() { all.forEach(loadEl); }, 1500);
+  if ('requestIdleCallback' in window) requestIdleCallback(function() { all.forEach(loadEl); }, { timeout: 3000 });
+});
+</script>
 
-        if (aboveFold || isAutoplay) {
-          if (el.tagName === 'IMG') {
-            el.loading = 'eager';
-            if (el.fetchPriority !== undefined) el.fetchPriority = 'high';
-          }
-          if (el.tagName === 'VIDEO') playVideo(el);
-        } else {
-          if (el.tagName === 'IMG') el.loading = 'lazy';
-          el.decoding = 'async';
-          if (el.tagName === 'VIDEO') {
-            belowFoldVideos.push(el);
-          } else {
-            belowFoldImgs.push(el);
-          }
-        }
-      });
-
-      if ('IntersectionObserver' in window) {
-        if (belowFoldImgs.length) {
-          var imgObserver = new IntersectionObserver(function(entries) {
-            entries.forEach(function(entry) {
-              if (entry.isIntersecting) { loadMedia(entry.target); imgObserver.unobserve(entry.target); }
-            });
-          }, { rootMargin: imgMargin + 'px 0px', threshold: 0.01 });
-          belowFoldImgs.forEach(function(el) { imgObserver.observe(el); });
-        }
-        if (belowFoldVideos.length) {
-          var videoObserver = new IntersectionObserver(function(entries) {
-            entries.forEach(function(entry) {
-              if (entry.isIntersecting) { loadMedia(entry.target); videoObserver.unobserve(entry.target); }
-            });
-          }, { rootMargin: videoMargin + 'px 0px', threshold: 0.01 });
-          belowFoldVideos.forEach(function(el) { videoObserver.observe(el); });
-        }
-      }
-
-      var all = belowFoldImgs.concat(belowFoldVideos);
-      setTimeout(function() { all.forEach(function(el) { loadMedia(el); }); }, 1500);
-      if ('requestIdleCallback' in window) {
-        requestIdleCallback(function() { all.forEach(function(el) { loadMedia(el); }); }, { timeout: 3000 });
-      }
-    });
-  </script>
-{% endif %}
-
-{% if ds_webp %}
-  <script defer>
-    document.addEventListener('DOMContentLoaded', function() {
-      document.querySelectorAll('img[src*="cdn.shopify"]').forEach(function(img) {
-        var src = img.getAttribute('src') || '';
-        if (src.indexOf('format=webp') === -1 && src.indexOf('.svg') === -1) {
-          var sep = src.indexOf('?') > -1 ? '&' : '?';
-          img.src = src + sep + 'format=webp';
-        }
-      });
-    });
-  </script>
-{% endif %}
-
+{% comment %} ── WebP automático via CDN Shopify ── {% endcomment %}
+<script defer>
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('img[src*="cdn.shopify"]').forEach(function(img) {
+    var src = img.getAttribute('src') || '';
+    if (!src.includes('format=webp') && !src.includes('.svg')) {
+      img.src = src + (src.includes('?') ? '&' : '?') + 'format=webp';
+    }
+  });
+});
+</script>
 {% endunless %}
 
-{% if ds_delay and ds_trigger != 'disabled' %}
-  <script defer>
-    (function() {
-      var triggered = false;
-      var trigger = {{ ds_trigger | json }};
-      function loadDelayedScripts() {
-        if (triggered) return;
-        triggered = true;
-        document.querySelectorAll('script[type="text/dreams-delay"]').forEach(function(s) {
-          var n = document.createElement('script');
-          n.src = s.getAttribute('data-src') || '';
-          n.async = true;
-          document.head.appendChild(n);
-        });
-      }
-      if (trigger === 'scroll') {
-        window.addEventListener('scroll', loadDelayedScripts, { once: true, passive: true });
-      } else if (trigger === 'click') {
-        window.addEventListener('click', loadDelayedScripts, { once: true });
-      } else {
-        ['scroll', 'click', 'touchstart', 'mousemove'].forEach(function(evt) {
-          window.addEventListener(evt, loadDelayedScripts, { once: true, passive: true });
-        });
-      }
-      setTimeout(loadDelayedScripts, 8000);
-    })();
-  </script>
-{% endif %}
-
+{% comment %} ── 6. Scripts customizados do app ── {% endcomment %}
 {% assign ds_scripts = shop.metafields.dreams_seo.scripts.value %}
 {% if ds_scripts != blank %}
   {% for item in ds_scripts %}
-    {% if item.enabled and item.placement == 'head' %}
-      {{ item.content }}
-    {% endif %}
+    {% if item.enabled and item.placement == 'head' %}{{ item.content }}{% endif %}
   {% endfor %}
   <script defer>
-    document.addEventListener('DOMContentLoaded', function() {
-      var scripts = {{ ds_scripts | json }};
-      if (!Array.isArray(scripts)) return;
-      scripts.forEach(function(item) {
-        if (!item.enabled || item.placement === 'head') return;
-        var container = document.createElement('div');
-        container.innerHTML = item.content;
-        var nodes = Array.from(container.childNodes);
-        nodes.forEach(function(node) {
-          if (node.nodeName === 'SCRIPT') {
-            var s = document.createElement('script');
-            if (node.src) s.src = node.src;
-            if (node.type) s.type = node.type;
-            if (node.textContent) s.textContent = node.textContent;
-            s.async = true;
-            if (item.placement === 'body_start') {
-              document.body.insertBefore(s, document.body.firstChild);
-            } else {
-              document.body.appendChild(s);
-            }
-          } else if (node.nodeType === 1) {
-            if (item.placement === 'body_start') {
-              document.body.insertBefore(node, document.body.firstChild);
-            } else {
-              document.body.appendChild(node);
-            }
-          }
-        });
+  document.addEventListener('DOMContentLoaded', function() {
+    var scripts = {{ ds_scripts | json }};
+    if (!Array.isArray(scripts)) return;
+    scripts.forEach(function(item) {
+      if (!item.enabled || item.placement === 'head') return;
+      var div = document.createElement('div');
+      div.innerHTML = item.content;
+      Array.from(div.childNodes).forEach(function(node) {
+        if (node.nodeName === 'SCRIPT') {
+          var s = document.createElement('script');
+          if (node.src) s.src = node.src;
+          if (node.type) s.type = node.type;
+          if (node.textContent) s.textContent = node.textContent;
+          s.async = true;
+        } else if (node.nodeType === 1) {
+          var target = item.placement === 'body_start' ? document.body.firstChild : null;
+          if (target) document.body.insertBefore(node, target);
+          else document.body.appendChild(node);
+        }
       });
     });
+  });
   </script>
 {% endif %}
 
@@ -293,40 +161,7 @@
   "settings": [
     {
       "type": "paragraph",
-      "content": "Configure pelo app Dreams SEO → Otimização. As configs do app sobrescrevem estas opções."
-    },
-    {
-      "type": "checkbox",
-      "id": "lazy_load_enabled",
-      "label": "Lazy Load (fallback)",
-      "default": true
-    },
-    {
-      "type": "checkbox",
-      "id": "delay_js_enabled",
-      "label": "Delay JavaScript (fallback)",
-      "default": false
-    },
-    {
-      "type": "range",
-      "id": "resource_hints_level",
-      "label": "Nível de cache (fallback)",
-      "min": 1,
-      "max": 3,
-      "step": 1,
-      "default": 2
-    },
-    {
-      "type": "checkbox",
-      "id": "schema_enabled",
-      "label": "Schema JSON-LD (fallback)",
-      "default": true
-    },
-    {
-      "type": "checkbox",
-      "id": "font_optimization",
-      "label": "Otimização de fontes (fallback)",
-      "default": true
+      "content": "Otimizações aplicadas automaticamente. Nenhuma configuração necessária."
     }
   ]
 }
