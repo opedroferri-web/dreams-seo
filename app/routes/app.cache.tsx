@@ -26,9 +26,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const formData = await request.formData();
 
-  const settings = await prisma.shopSettings.update({
+  const settings = await prisma.shopSettings.upsert({
     where: { shop: session.shop },
-    data: {
+    update: {
       lazyLoadEnabled: formData.get("lazyLoadEnabled") === "true",
       delayJsEnabled: formData.get("delayJsEnabled") === "true",
       dnsPrefetchEnabled: formData.get("dnsPrefetchEnabled") === "true",
@@ -37,7 +37,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       prefetchEnabled: formData.get("prefetchEnabled") === "true",
       fontOptimization: formData.get("fontOptimization") === "true",
       resourceHintsLevel: parseInt(formData.get("resourceHintsLevel") as string) || 1,
-      delayJsTrigger: formData.get("delayJsTrigger") as string || "scroll",
+      delayJsTrigger: (formData.get("delayJsTrigger") as string) || "scroll",
+    },
+    create: {
+      shop: session.shop,
+      lazyLoadEnabled: formData.get("lazyLoadEnabled") === "true",
+      delayJsEnabled: formData.get("delayJsEnabled") === "true",
+      dnsPrefetchEnabled: formData.get("dnsPrefetchEnabled") === "true",
+      preconnectEnabled: formData.get("preconnectEnabled") === "true",
+      preloadEnabled: formData.get("preloadEnabled") === "true",
+      prefetchEnabled: formData.get("prefetchEnabled") === "true",
+      fontOptimization: formData.get("fontOptimization") === "true",
+      resourceHintsLevel: parseInt(formData.get("resourceHintsLevel") as string) || 1,
+      delayJsTrigger: (formData.get("delayJsTrigger") as string) || "scroll",
     },
   });
 
@@ -72,7 +84,7 @@ export default function Cache() {
   };
 
   return (
-    <Page title="Cache Engine">
+    <Page title="Cache e performance">
       <BlockStack gap="500">
         <Banner tone="info">
           A Shopify possui CDN próprio. Este módulo otimiza browser cache, resource hints,
@@ -85,9 +97,9 @@ export default function Cache() {
           <Layout.Section>
             <Card>
               <BlockStack gap="400">
-                <Text as="h3" variant="headingMd">Resource Hints</Text>
+                <Text as="h3" variant="headingMd">Dicas de recursos</Text>
                 <Select
-                  label="Nível de Resource Hints"
+                  label="Nível de dicas de recursos"
                   options={hintLevels}
                   value={String(s.resourceHintsLevel)}
                   onChange={(v) => save({ resourceHintsLevel: v })}
@@ -109,7 +121,7 @@ export default function Cache() {
           <Layout.Section variant="oneHalf">
             <Card>
               <BlockStack gap="400">
-                <Text as="h3" variant="headingMd">Lazy Load Manager</Text>
+                <Text as="h3" variant="headingMd">Carregamento tardio (lazy load)</Text>
                 <Checkbox
                   label="Ativar Lazy Load (imagens, iframes, vídeos)"
                   checked={s.lazyLoadEnabled}
@@ -122,7 +134,7 @@ export default function Cache() {
           <Layout.Section variant="oneHalf">
             <Card>
               <BlockStack gap="400">
-                <Text as="h3" variant="headingMd">Delay JavaScript</Text>
+                <Text as="h3" variant="headingMd">Adiar JavaScript</Text>
                 <Checkbox
                   label="Ativar Delay JS"
                   checked={s.delayJsEnabled}
@@ -150,7 +162,7 @@ export default function Cache() {
           <Layout.Section>
             <Card>
               <BlockStack gap="400">
-                <Text as="h3" variant="headingMd">Font Optimization</Text>
+                <Text as="h3" variant="headingMd">Otimização de fontes</Text>
                 <Checkbox
                   label="Ativar otimização de fontes (font-display: swap + preload)"
                   checked={s.fontOptimization}
@@ -166,7 +178,7 @@ export default function Cache() {
           <Layout.Section>
             <Card>
               <BlockStack gap="300">
-                <Text as="h3" variant="headingMd">Critical Resources</Text>
+                <Text as="h3" variant="headingMd">Recursos críticos</Text>
                 <Text as="p" tone="subdued">
                   Recomendações geradas com base no tema ativo:
                 </Text>

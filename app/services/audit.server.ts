@@ -20,6 +20,30 @@ import {
 import type { AuditIssueInput, AppImpact, ThemeAuditResult } from "~/lib/types";
 import prisma from "~/db.server";
 import { calculateScores, aggregateMetrics } from "~/lib/scoring.server";
+import { adminGraphql } from "~/lib/graphql.server";
+
+const ISSUE_BATCH_SIZE = 50;
+
+async function createIssuesInBatches(
+  shop: string,
+  issues: AuditIssueInput[],
+) {
+  for (let i = 0; i < issues.length; i += ISSUE_BATCH_SIZE) {
+    const batch = issues.slice(i, i + ISSUE_BATCH_SIZE);
+    await prisma.auditIssue.createMany({
+      data: batch.map((issue) => ({
+        shop,
+        resourceType: issue.resourceType,
+        resourceId: issue.resourceId,
+        resourceTitle: issue.resourceTitle,
+        issueType: issue.issueType,
+        severity: issue.severity,
+        message: issue.message,
+        suggestion: issue.suggestion,
+      })),
+    });
+  }
+}
 
 interface PaginatedFetch<T> {
   nodes: T[];
@@ -78,29 +102,26 @@ export async function runFullAudit(
   shop: string,
   admin: AdminApiContext["admin"],
 ) {
-  const [products, collections, pagesResponse, blogsResponse, filesResponse, scriptsResponse] =
+  const [products, collections, pagesResult, blogsResult, filesResult, scriptsResult] =
     await Promise.all([
       fetchAllProducts(admin),
       fetchAllCollections(admin),
-      admin.graphql(GET_PAGES_SEO, { variables: { first: 100 } }),
-      admin.graphql(GET_BLOGS_SEO, { variables: { first: 10 } }),
-      admin.graphql(GET_FILES, { variables: { first: 100 } }),
-      admin.graphql(GET_SCRIPT_TAGS),
+      adminGraphql(admin, GET_PAGES_SEO, { first: 100 }),
+      adminGraphql(admin, GET_BLOGS_SEO, { first: 10 }),
+      adminGraphql(admin, GET_FILES, { first: 100 }),
+      adminGraphql(admin, GET_SCRIPT_TAGS).catch(() => ({ data: null, errors: [] })),
     ]);
 
-  const pagesJson = await pagesResponse.json();
-  const blogsJson = await blogsResponse.json();
-  const filesJson = await filesResponse.json();
-  const scriptsJson = await scriptsResponse.json();
-
-  const pages = pagesJson.data?.pages?.edges?.map((e: { node: unknown }) => e.node) || [];
-  const blogs = blogsJson.data?.blogs?.edges || [];
+  const pages =
+    pagesResult.data?.pages?.edges?.map((e: { node: unknown }) => e.node) || [];
+  const blogs = blogsResult.data?.blogs?.edges || [];
   const articles = blogs.flatMap(
     (b: { node: { articles: { edges: Array<{ node: unknown }> } } }) =>
       b.node.articles.edges.map((e) => e.node),
   );
-  const files = filesJson.data?.files?.edges?.map((e: { node: unknown }) => e.node) || [];
-  const scriptTags = scriptsJson.data?.scriptTags?.edges?.length || 0;
+  const files =
+    filesResult.data?.files?.edges?.map((e: { node: unknown }) => e.node) || [];
+  const scriptTags = scriptsResult.data?.scriptTags?.edges?.length || 0;
 
   const allIssues: AuditIssueInput[] = [];
 
@@ -175,18 +196,7 @@ export async function runFullAudit(
 
   await prisma.auditIssue.deleteMany({ where: { shop, fixed: false } });
   if (allIssues.length > 0) {
-    await prisma.auditIssue.createMany({
-      data: allIssues.map((issue) => ({
-        shop,
-        resourceType: issue.resourceType,
-        resourceId: issue.resourceId,
-        resourceTitle: issue.resourceTitle,
-        issueType: issue.issueType,
-        severity: issue.severity,
-        message: issue.message,
-        suggestion: issue.suggestion,
-      })),
-    });
+    await createIssuesInBatches(shop, allIssues);
   }
 
   const snapshot = await prisma.auditSnapshot.create({

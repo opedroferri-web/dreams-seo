@@ -103,7 +103,6 @@ export const GET_PAGES_SEO = `#graphql
           title
           handle
           bodySummary
-          body
           createdAt
           updatedAt
         }

@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { useFetcher, useLoaderData } from "@remix-run/react";
 import { Page, Layout, Grid, Banner, BlockStack, Card, Text, Badge } from "@shopify/polaris";
 import { authenticate } from "~/shopify.server";
@@ -27,7 +28,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     article: issues.filter((i) => i.resourceType === "article"),
   };
 
-  return {
+  return json({
     issues,
     scores: {
       products: calculateResourceScore(byType.product, Math.max(byType.product.length, 1) * 8),
@@ -41,7 +42,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       pages: byType.page.length,
       articles: byType.article.length,
     },
-  };
+  });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -49,18 +50,32 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
 
-  if (intent === "run_audit") {
-    await runFullAudit(session.shop, admin);
-    return { success: true };
-  }
+  try {
+    if (intent === "run_audit") {
+      await runFullAudit(session.shop, admin);
+      return json({ success: true });
+    }
 
-  if (intent === "bulk_action") {
-    const actionType = formData.get("action") as BulkAction;
-    const result = await runBulkAction(session.shop, admin, actionType);
-    return { success: true, bulk: { action: actionType, updated: result.updated } };
-  }
+    if (intent === "bulk_action") {
+      const actionType = formData.get("action") as BulkAction;
+      const result = await runBulkAction(session.shop, admin, actionType);
+      return json({ success: true, bulk: { action: actionType, updated: result.updated } });
+    }
 
-  return { success: false };
+    return json({ success: false, error: "Ação desconhecida" });
+  } catch (error) {
+    console.error("[seo-audit action]", error);
+    return json(
+      {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro ao processar. Tente novamente.",
+      },
+      { status: 500 },
+    );
+  }
 };
 
 export default function SeoAudit() {
@@ -70,15 +85,21 @@ export default function SeoAudit() {
 
   return (
     <Page
-      title="SEO Audit"
+      title="Auditoria SEO"
       primaryAction={{
-        content: "Escanear Loja",
-        loading: isLoading,
+        content: "Escanear loja",
+        loading: isLoading && fetcher.formData?.get("intent") === "run_audit",
         onAction: () => fetcher.submit({ intent: "run_audit" }, { method: "POST" }),
       }}
     >
       <BlockStack gap="500">
-        {fetcher.data?.success && <Banner tone="success">Auditoria atualizada!</Banner>}
+        {fetcher.data?.success && !fetcher.data.error && (
+          <Banner tone="success">Auditoria atualizada!</Banner>
+        )}
+
+        {fetcher.data?.error && (
+          <Banner tone="critical">{fetcher.data.error}</Banner>
+        )}
 
         <Grid>
           <Grid.Cell columnSpan={{ xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }}>
@@ -97,12 +118,15 @@ export default function SeoAudit() {
 
         <Card>
           <BlockStack gap="300">
-            <Text as="h3" variant="headingMd">Verificações Realizadas</Text>
+            <Text as="h3" variant="headingMd">Verificações realizadas</Text>
             <BlockStack gap="100">
               {[
-                "Meta Title ausente", "Meta Description ausente", "Título muito curto/longo",
-                "Handle ruim", "ALT ausente", "Conteúdo curto", "Headings ausentes",
-                "Links internos", "Schema Article",
+                "Meta title ausente",
+                "Meta description ausente",
+                "Título curto ou longo",
+                "Handle ruim",
+                "ALT ausente",
+                "Conteúdo curto",
               ].map((check) => (
                 <Badge key={check} tone="info">{check}</Badge>
               ))}

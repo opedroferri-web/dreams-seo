@@ -15,6 +15,13 @@ interface IssuesTableProps {
   title?: string;
 }
 
+const severityLabel: Record<string, string> = {
+  critical: "crítica",
+  high: "alta",
+  medium: "média",
+  low: "baixa",
+};
+
 const severityTone = (severity: string) => {
   switch (severity) {
     case "critical":
@@ -47,7 +54,7 @@ export function IssuesTable({ issues, title = "Problemas Detectados" }: IssuesTa
     issue.resourceTitle || issue.resourceType,
     issue.issueType.replace(/_/g, " "),
     <Badge key={issue.id} tone={severityTone(issue.severity)}>
-      {issue.severity}
+      {severityLabel[issue.severity] || issue.severity}
     </Badge>,
     issue.message,
     issue.suggestion || "—",

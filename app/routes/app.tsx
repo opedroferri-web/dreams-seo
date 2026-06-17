@@ -21,9 +21,9 @@ export default function App() {
     <AppProvider isEmbeddedApp apiKey={apiKey}>
       <NavMenu>
         <Link to="/app" rel="home">
-          Dreams SEO Pro
+          Painel
         </Link>
-        {NAV_ITEMS.slice(1).map((item) => (
+        {NAV_ITEMS.map((item) => (
           <Link key={item.url} to={item.url}>
             {item.label}
           </Link>

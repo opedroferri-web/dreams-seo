@@ -183,7 +183,7 @@ export function auditCollection(collection: CollectionNode): AuditIssueInput[] {
 
 export function auditPage(page: PageNode): AuditIssueInput[] {
   const issues: AuditIssueInput[] = [];
-  const content = stripHtml(page.body || "");
+  const content = stripHtml(page.bodySummary || page.body || "");
 
   if (!page.title || page.title.length < 10) {
     issues.push({
@@ -207,7 +207,7 @@ export function auditPage(page: PageNode): AuditIssueInput[] {
     });
   }
 
-  const hasH1 = (page.body || "").includes("<h1");
+  const hasH1 = (page.bodySummary || page.body || "").includes("<h1");
   if (!hasH1) {
     issues.push({
       resourceType: "page",

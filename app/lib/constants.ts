@@ -102,19 +102,7 @@ export const DELAY_JS_TARGETS = [
 ] as const;
 
 export const NAV_ITEMS = [
-  { label: "Dashboard", url: "/app", icon: "HomeIcon" },
-  { label: "SEO Audit", url: "/app/seo-audit", icon: "SearchIcon" },
-  { label: "Products SEO", url: "/app/products-seo", icon: "ProductIcon" },
-  { label: "Collections SEO", url: "/app/collections-seo", icon: "CollectionIcon" },
-  { label: "Pages SEO", url: "/app/pages-seo", icon: "PageIcon" },
-  { label: "Blog SEO", url: "/app/blog-seo", icon: "BlogIcon" },
-  { label: "Images", url: "/app/images", icon: "ImageIcon" },
-  { label: "Performance", url: "/app/performance", icon: "GaugeIcon" },
-  { label: "Cache", url: "/app/cache", icon: "DatabaseIcon" },
-  { label: "Script Manager", url: "/app/scripts", icon: "CodeIcon" },
-  { label: "Theme Audit", url: "/app/theme-audit", icon: "ThemeIcon" },
-  { label: "Schema", url: "/app/schema", icon: "SchemaIcon" },
-  { label: "Broken Links", url: "/app/broken-links", icon: "LinkIcon" },
-  { label: "Redirects", url: "/app/redirects", icon: "RedirectIcon" },
-  { label: "Settings", url: "/app/settings", icon: "SettingsIcon" },
+  { label: "Cache", url: "/app/cache" },
+  { label: "Auditoria SEO", url: "/app/seo-audit" },
+  { label: "Configurações", url: "/app/settings" },
 ] as const;
