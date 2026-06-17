@@ -104,5 +104,4 @@ export const DELAY_JS_TARGETS = [
 export const NAV_ITEMS = [
   { label: "Otimização", url: "/app/otimizacao" },
   { label: "Auditoria SEO", url: "/app/seo-audit" },
-  { label: "Configurações", url: "/app/settings" },
 ] as const;

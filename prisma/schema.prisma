@@ -40,6 +40,7 @@ model ShopSettings {
   redirectManagerEnabled Boolean @default(true)
   resourceHintsLevel    Int      @default(1)
   delayJsTrigger        String   @default("scroll")
+  webpEnabled           Boolean  @default(true)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }

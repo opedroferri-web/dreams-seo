@@ -8,6 +8,7 @@ export interface OptimizationSettings {
   fontOptimization: boolean;
   resourceHintsLevel: number;
   delayJsTrigger: string;
+  webpEnabled: boolean;
 }
 
 export const OPTIMIZATION_LEVELS = [
@@ -48,6 +49,7 @@ export const OPTIMIZATION_PRESETS: Record<number, OptimizationSettings> = {
     fontOptimization: false,
     resourceHintsLevel: 1,
     delayJsTrigger: "scroll",
+    webpEnabled: true,
   },
   2: {
     lazyLoadEnabled: true,
@@ -59,6 +61,7 @@ export const OPTIMIZATION_PRESETS: Record<number, OptimizationSettings> = {
     fontOptimization: true,
     resourceHintsLevel: 2,
     delayJsTrigger: "scroll",
+    webpEnabled: true,
   },
   3: {
     lazyLoadEnabled: true,
@@ -70,6 +73,7 @@ export const OPTIMIZATION_PRESETS: Record<number, OptimizationSettings> = {
     fontOptimization: true,
     resourceHintsLevel: 3,
     delayJsTrigger: "scroll",
+    webpEnabled: true,
   },
   4: {
     lazyLoadEnabled: true,
@@ -80,7 +84,8 @@ export const OPTIMIZATION_PRESETS: Record<number, OptimizationSettings> = {
     prefetchEnabled: true,
     fontOptimization: true,
     resourceHintsLevel: 3,
-    delayJsTrigger: "interaction",
+    delayJsTrigger: "scroll",
+    webpEnabled: true,
   },
 };
 
@@ -105,7 +110,7 @@ export function calculateOptimizationScore(settings: OptimizationSettings): numb
     settings.delayJsEnabled,
     settings.fontOptimization,
     settings.resourceHintsLevel >= 2,
-    settings.resourceHintsLevel >= 3,
+    settings.webpEnabled,
   ];
   const active = checks.filter(Boolean).length;
   return Math.round((active / checks.length) * 100);

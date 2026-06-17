@@ -1,29 +1,90 @@
 {% comment %}
-  Dreams SEO Pro - Theme App Extension
-  App Embeds: Scripts, Schema, Performance, Resource Hints
+  Dreams SEO — Theme App Extension
+  Lê configurações do app via shop.metafields.dreams_seo.config (sincronizado pelo admin)
 {% endcomment %}
 
-{% if block.settings.resource_hints_level >= 1 %}
-  <link rel="preconnect" href="https://cdn.shopify.com" crossorigin>
-  <link rel="preconnect" href="https://fonts.shopifycdn.com" crossorigin>
-  <link rel="dns-prefetch" href="https://cdn.shopify.com">
-  <link rel="dns-prefetch" href="https://www.google-analytics.com">
-  <link rel="dns-prefetch" href="https://connect.facebook.net">
-{% endif %}
+{% liquid
+  assign ds_lazy = block.settings.lazy_load_enabled
+  assign ds_delay = block.settings.delay_js_enabled
+  assign ds_trigger = 'scroll'
+  assign ds_hints = block.settings.resource_hints_level
+  assign ds_schema = block.settings.schema_enabled
+  assign ds_font = block.settings.font_optimization
+  assign ds_preload = true
+  assign ds_prefetch = false
+  assign ds_dns = true
+  assign ds_preconnect = true
+  assign ds_webp = true
 
-{% if block.settings.resource_hints_level >= 2 %}
-  {% if product.featured_image %}
-    <link rel="preload" as="image" href="{{ product.featured_image | image_url: width: 800 }}">
+  assign cfg = shop.metafields.dreams_seo.config.value
+  if cfg != blank
+    if cfg.lazy_load_enabled != nil
+      assign ds_lazy = cfg.lazy_load_enabled
+    endif
+    if cfg.delay_js_enabled != nil
+      assign ds_delay = cfg.delay_js_enabled
+    endif
+    if cfg.delay_js_trigger != blank
+      assign ds_trigger = cfg.delay_js_trigger
+    endif
+    if cfg.resource_hints_level != nil
+      assign ds_hints = cfg.resource_hints_level
+    endif
+    if cfg.schema_enabled != nil
+      assign ds_schema = cfg.schema_enabled
+    endif
+    if cfg.font_optimization != nil
+      assign ds_font = cfg.font_optimization
+    endif
+    if cfg.preload_enabled != nil
+      assign ds_preload = cfg.preload_enabled
+    endif
+    if cfg.prefetch_enabled != nil
+      assign ds_prefetch = cfg.prefetch_enabled
+    endif
+    if cfg.dns_prefetch_enabled != nil
+      assign ds_dns = cfg.dns_prefetch_enabled
+    endif
+    if cfg.preconnect_enabled != nil
+      assign ds_preconnect = cfg.preconnect_enabled
+    endif
+    if cfg.webp_enabled != nil
+      assign ds_webp = cfg.webp_enabled
+    endif
+  endif
+%}
+
+{% if ds_preconnect or ds_dns %}
+  {% if ds_preconnect %}
+    <link rel="preconnect" href="https://cdn.shopify.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.shopifycdn.com" crossorigin>
+  {% endif %}
+  {% if ds_dns %}
+    <link rel="dns-prefetch" href="https://cdn.shopify.com">
+    <link rel="dns-prefetch" href="https://www.google-analytics.com">
+    <link rel="dns-prefetch" href="https://connect.facebook.net">
   {% endif %}
 {% endif %}
 
-{% if block.settings.font_optimization %}
+{% if ds_hints >= 2 and ds_preload %}
+  {% if product.featured_image %}
+    <link rel="preload" as="image" href="{{ product.featured_image | image_url: width: 800, format: 'webp' }}">
+  {% elsif collection.image %}
+    <link rel="preload" as="image" href="{{ collection.image | image_url: width: 800, format: 'webp' }}">
+  {% endif %}
+{% endif %}
+
+{% if ds_prefetch and ds_hints >= 3 %}
+  <link rel="prefetch" href="{{ routes.root_url }}">
+{% endif %}
+
+{% if ds_font %}
   <style>
-    @font-face { font-display: swap; }
+    @font-face { font-display: swap !important; }
   </style>
 {% endif %}
 
-{% if block.settings.schema_enabled %}
+{% if ds_schema %}
   {% if template.name == 'product' and product %}
     <script type="application/ld+json">
     {
@@ -33,10 +94,7 @@
       "description": {{ product.description | strip_html | truncate: 300 | json }},
       "image": "{{ product.featured_image | image_url: width: 800 }}",
       "url": "{{ shop.url }}{{ product.url }}",
-      "brand": {
-        "@type": "Brand",
-        "name": {{ shop.name | json }}
-      },
+      "brand": { "@type": "Brand", "name": {{ shop.name | json }} },
       "offers": {
         "@type": "Offer",
         "priceCurrency": {{ cart.currency.iso_code | json }},
@@ -47,28 +105,6 @@
     }
     </script>
   {% endif %}
-
-  {% if template.name == 'article' and article %}
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "Article",
-      "headline": {{ article.title | json }},
-      "description": {{ article.excerpt | default: article.content | strip_html | truncate: 200 | json }},
-      "author": {
-        "@type": "Organization",
-        "name": {{ shop.name | json }}
-      },
-      "publisher": {
-        "@type": "Organization",
-        "name": {{ shop.name | json }}
-      },
-      "datePublished": "{{ article.published_at | date: '%Y-%m-%d' }}",
-      "dateModified": "{{ article.updated_at | date: '%Y-%m-%d' }}"
-    }
-    </script>
-  {% endif %}
-
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -77,127 +113,106 @@
     "url": "{{ shop.url }}"
   }
   </script>
-
-  {% unless template.name == 'index' %}
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      "itemListElement": [
-        {
-          "@type": "ListItem",
-          "position": 1,
-          "name": "Home",
-          "item": "{{ shop.url }}"
-        }
-        {% if collection %},
-        {
-          "@type": "ListItem",
-          "position": 2,
-          "name": {{ collection.title | json }},
-          "item": "{{ shop.url }}{{ collection.url }}"
-        }
-        {% endif %}
-      ]
-    }
-    </script>
-  {% endunless %}
 {% endif %}
 
-{% if block.settings.lazy_load_enabled %}
+{% if ds_lazy %}
   <script defer>
     document.addEventListener('DOMContentLoaded', function() {
-      var lazyElements = document.querySelectorAll('img[data-src], iframe[data-src], video[data-src]');
-      if ('IntersectionObserver' in window) {
-        var observer = new IntersectionObserver(function(entries) {
-          entries.forEach(function(entry) {
-            if (entry.isIntersecting) {
-              var el = entry.target;
-              if (el.dataset.src) {
-                el.src = el.dataset.src;
-                el.removeAttribute('data-src');
-              }
-              observer.unobserve(el);
-            }
-          });
-        }, { rootMargin: '200px' });
-        lazyElements.forEach(function(el) { observer.observe(el); });
-      }
       document.querySelectorAll('img:not([loading])').forEach(function(img) {
         img.loading = 'lazy';
+        img.decoding = 'async';
       });
     });
   </script>
 {% endif %}
 
-{% if block.settings.delay_js_enabled %}
+{% if ds_webp %}
+  <script defer>
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('img[src*="cdn.shopify"]').forEach(function(img) {
+        var src = img.getAttribute('src') || '';
+        if (src.indexOf('format=webp') === -1 && src.indexOf('.svg') === -1) {
+          var sep = src.indexOf('?') > -1 ? '&' : '?';
+          img.src = src + sep + 'format=webp';
+        }
+      });
+    });
+  </script>
+{% endif %}
+
+{% if ds_delay and ds_trigger != 'disabled' %}
   <script defer>
     (function() {
       var triggered = false;
-      var scripts = [
+      var patterns = [
         'google-analytics.com', 'googletagmanager.com', 'connect.facebook.net',
         'hotjar.com', 'clarity.ms', 'analytics.tiktok.com', 'pinimg.com'
       ];
+      var trigger = {{ ds_trigger | json }};
       function loadDelayedScripts() {
         if (triggered) return;
         triggered = true;
-        document.querySelectorAll('script[src]').forEach(function(s) {
-          var src = s.getAttribute('src') || '';
-          scripts.forEach(function(pattern) {
-            if (src.indexOf(pattern) > -1 && s.type === 'text/dreams-delay') {
-              s.type = 'text/javascript';
-              var newScript = document.createElement('script');
-              newScript.src = src;
-              newScript.async = true;
-              document.head.appendChild(newScript);
-            }
-          });
+        document.querySelectorAll('script[type=\"text/dreams-delay\"]').forEach(function(s) {
+          var n = document.createElement('script');
+          n.src = s.getAttribute('data-src') || '';
+          n.async = true;
+          document.head.appendChild(n);
         });
       }
-      ['scroll', 'click', 'touchstart', 'mousemove'].forEach(function(evt) {
-        window.addEventListener(evt, loadDelayedScripts, { once: true, passive: true });
-      });
-      setTimeout(loadDelayedScripts, 5000);
+      if (trigger === 'scroll') {
+        window.addEventListener('scroll', loadDelayedScripts, { once: true, passive: true });
+      } else if (trigger === 'click') {
+        window.addEventListener('click', loadDelayedScripts, { once: true });
+      } else {
+        ['scroll', 'click', 'touchstart', 'mousemove'].forEach(function(evt) {
+          window.addEventListener(evt, loadDelayedScripts, { once: true, passive: true });
+        });
+      }
+      setTimeout(loadDelayedScripts, 8000);
     })();
   </script>
 {% endif %}
 
 {% schema %}
 {
-  "name": "Dreams SEO Pro",
+  "name": "Dreams SEO",
   "target": "head",
   "settings": [
     {
+      "type": "paragraph",
+      "content": "Configure pelo app Dreams SEO → Otimização. As configs do app sobrescrevem estas opções."
+    },
+    {
       "type": "checkbox",
       "id": "lazy_load_enabled",
-      "label": "Lazy Load",
+      "label": "Lazy Load (fallback)",
       "default": true
     },
     {
       "type": "checkbox",
       "id": "delay_js_enabled",
-      "label": "Delay JavaScript",
+      "label": "Delay JavaScript (fallback)",
       "default": false
     },
     {
       "type": "range",
       "id": "resource_hints_level",
-      "label": "Resource Hints Level",
+      "label": "Nível de cache (fallback)",
       "min": 1,
       "max": 3,
       "step": 1,
-      "default": 1
+      "default": 2
     },
     {
       "type": "checkbox",
       "id": "schema_enabled",
-      "label": "Schema Injection",
+      "label": "Schema JSON-LD (fallback)",
       "default": true
     },
     {
       "type": "checkbox",
       "id": "font_optimization",
-      "label": "Font Optimization",
+      "label": "Otimização de fontes (fallback)",
       "default": true
     }
   ]
