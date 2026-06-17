@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useFetcher, useLoaderData } from "@remix-run/react";
+import { useFetcher, useLoaderData, Link } from "@remix-run/react";
 import {
   Page,
   BlockStack,
@@ -27,22 +27,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const settings = await prisma.shopSettings.upsert({
     where: { shop: session.shop },
     update: {
-      lazyLoadEnabled: formData.get("lazyLoadEnabled") === "true",
-      delayJsEnabled: formData.get("delayJsEnabled") === "true",
-      dnsPrefetchEnabled: formData.get("dnsPrefetchEnabled") === "true",
-      preconnectEnabled: formData.get("preconnectEnabled") === "true",
-      fontOptimization: formData.get("fontOptimization") === "true",
       schemaInjection: formData.get("schemaInjection") === "true",
       scriptManagerEnabled: formData.get("scriptManagerEnabled") === "true",
       redirectManagerEnabled: formData.get("redirectManagerEnabled") === "true",
     },
     create: {
       shop: session.shop,
-      lazyLoadEnabled: formData.get("lazyLoadEnabled") === "true",
-      delayJsEnabled: formData.get("delayJsEnabled") === "true",
-      dnsPrefetchEnabled: formData.get("dnsPrefetchEnabled") === "true",
-      preconnectEnabled: formData.get("preconnectEnabled") === "true",
-      fontOptimization: formData.get("fontOptimization") === "true",
       schemaInjection: formData.get("schemaInjection") === "true",
       scriptManagerEnabled: formData.get("scriptManagerEnabled") === "true",
       redirectManagerEnabled: formData.get("redirectManagerEnabled") === "true",
@@ -60,11 +50,6 @@ export default function Settings() {
   const save = (key: string, value: boolean) => {
     fetcher.submit(
       {
-        lazyLoadEnabled: String(s.lazyLoadEnabled),
-        delayJsEnabled: String(s.delayJsEnabled),
-        dnsPrefetchEnabled: String(s.dnsPrefetchEnabled),
-        preconnectEnabled: String(s.preconnectEnabled),
-        fontOptimization: String(s.fontOptimization),
         schemaInjection: String(s.schemaInjection),
         scriptManagerEnabled: String(s.scriptManagerEnabled),
         redirectManagerEnabled: String(s.redirectManagerEnabled),
@@ -79,27 +64,31 @@ export default function Settings() {
       <BlockStack gap="500">
         {fetcher.data?.success && <Banner tone="success">Configurações salvas!</Banner>}
 
+        <Banner tone="info">
+          Performance e cache estão em{" "}
+          <Link to="/app/otimizacao">Otimização</Link>.
+        </Banner>
+
         <Layout>
           <Layout.Section>
             <Card>
               <BlockStack gap="400">
-                <Text as="h3" variant="headingMd">Performance</Text>
-                <Checkbox label="Lazy load de imagens" checked={s.lazyLoadEnabled} onChange={(v) => save("lazyLoadEnabled", v)} />
-                <Checkbox label="Adiar JavaScript" checked={s.delayJsEnabled} onChange={(v) => save("delayJsEnabled", v)} />
-                <Checkbox label="DNS prefetch" checked={s.dnsPrefetchEnabled} onChange={(v) => save("dnsPrefetchEnabled", v)} />
-                <Checkbox label="Preconnect" checked={s.preconnectEnabled} onChange={(v) => save("preconnectEnabled", v)} />
-                <Checkbox label="Otimização de fontes" checked={s.fontOptimization} onChange={(v) => save("fontOptimization", v)} />
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-
-          <Layout.Section variant="oneHalf">
-            <Card>
-              <BlockStack gap="400">
                 <Text as="h3" variant="headingMd">Módulos</Text>
-                <Checkbox label="Injeção de schema" checked={s.schemaInjection} onChange={(v) => save("schemaInjection", v)} />
-                <Checkbox label="Gerenciador de scripts" checked={s.scriptManagerEnabled} onChange={(v) => save("scriptManagerEnabled", v)} />
-                <Checkbox label="Gerenciador de redirects" checked={s.redirectManagerEnabled} onChange={(v) => save("redirectManagerEnabled", v)} />
+                <Checkbox
+                  label="Injeção de schema (JSON-LD)"
+                  checked={s.schemaInjection}
+                  onChange={(v) => save("schemaInjection", v)}
+                />
+                <Checkbox
+                  label="Gerenciador de scripts"
+                  checked={s.scriptManagerEnabled}
+                  onChange={(v) => save("scriptManagerEnabled", v)}
+                />
+                <Checkbox
+                  label="Gerenciador de redirects"
+                  checked={s.redirectManagerEnabled}
+                  onChange={(v) => save("redirectManagerEnabled", v)}
+                />
               </BlockStack>
             </Card>
           </Layout.Section>
@@ -109,7 +98,7 @@ export default function Settings() {
           <BlockStack gap="200">
             <Text as="h3" variant="headingMd">Extensão de tema</Text>
             <Text as="p" tone="subdued">
-              Ative os app embeds em Loja online → Temas → Personalizar → App embeds → Dreams SEO.
+              Ative o app embed Dreams SEO em Loja online → Temas → Personalizar → App embeds.
             </Text>
           </BlockStack>
         </Card>
