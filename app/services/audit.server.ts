@@ -161,8 +161,10 @@ export async function runFullAudit(
 
   let estimatedWeight = 0;
   for (const file of files) {
-    const f = file as { originalSource?: { fileSize?: number } };
-    estimatedWeight += f.originalSource?.fileSize || 50000;
+    const f = file as { image?: { width?: number; height?: number } };
+    const w = f.image?.width ?? 800;
+    const h = f.image?.height ?? 800;
+    estimatedWeight += Math.round((w * h) / 12);
   }
   estimatedWeight = Math.round(estimatedWeight / 1024);
 

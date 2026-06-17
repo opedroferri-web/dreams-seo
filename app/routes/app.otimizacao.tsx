@@ -34,7 +34,7 @@ import {
   saveOptimizationSettings,
   settingsToOptimization,
 } from "~/services/optimization-page.server";
-import { analyzeStorePerformance } from "~/services/performance-analysis.server";
+import { analyzeStorePerformance, emptyPerformanceReport } from "~/services/performance-analysis.server";
 import {
   OPTIMIZATION_LEVELS,
   calculateOptimizationScore,
@@ -61,7 +61,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const optimization = settingsToOptimization(settings);
   const shopUrl = shopData.data?.shop?.primaryDomain?.url ?? `https://${shop}`;
 
-  const performance = await analyzeStorePerformance(shop, admin, optimization, shopUrl);
+  let performance;
+  try {
+    performance = await analyzeStorePerformance(shop, admin, optimization, shopUrl);
+  } catch (error) {
+    console.error("[otimizacao loader]", error);
+    performance = emptyPerformanceReport(
+      shopUrl,
+      optimization,
+      error instanceof Error ? error.message : undefined,
+    );
+  }
 
   return json({
     settings,
@@ -307,6 +317,11 @@ export default function Otimizacao() {
           <Banner tone="success">{fetcher.data.message}</Banner>
         )}
         {fetcher.data?.error && <Banner tone="critical">{fetcher.data.error}</Banner>}
+        {performance.analysisError && (
+          <Banner tone="warning">
+            Análise parcial: {performance.analysisError}. As configurações continuam funcionando.
+          </Banner>
+        )}
 
         <Card>
           <InlineStack align="space-between" blockAlign="center">

@@ -21,8 +21,8 @@ export function settingsToOptimization(settings: ShopSettings): OptimizationSett
     prefetchEnabled: settings.prefetchEnabled,
     fontOptimization: settings.fontOptimization,
     resourceHintsLevel: settings.resourceHintsLevel,
-    delayJsTrigger: settings.delayJsTrigger,
-    webpEnabled: settings.webpEnabled,
+    delayJsTrigger: settings.delayJsTrigger || "scroll",
+    webpEnabled: settings.webpEnabled ?? true,
   };
 }
 
@@ -77,7 +77,11 @@ export async function saveOptimizationSettings(
   });
 
   if (admin) {
-    await syncOptimizationToMetafield(admin, toStorefrontConfig(settings));
+    try {
+      await syncOptimizationToMetafield(admin, toStorefrontConfig(settings));
+    } catch (error) {
+      console.error("[saveOptimizationSettings] metafield sync failed", error);
+    }
   }
 
   return settings;

@@ -31,30 +31,45 @@ export async function syncOptimizationToMetafield(
   admin: AdminApiContext["admin"],
   config: StorefrontConfig,
 ) {
-  const { data } = await adminGraphql<{ shop?: { id: string } }>(admin, GET_SHOP);
-  const shopId = data?.shop?.id;
-  if (!shopId) return { ok: false, error: "Loja não encontrada" };
+  try {
+    const { data, errors } = await adminGraphql<{ shop?: { id: string } }>(admin, GET_SHOP);
+    if (errors.length > 0) {
+      return { ok: false, error: errors.join(", ") };
+    }
 
-  const response = await admin.graphql(CREATE_METAFIELD, {
-    variables: {
-      metafields: [
-        {
-          ownerId: shopId,
-          namespace: "dreams_seo",
-          key: "config",
-          type: "json",
-          value: JSON.stringify(buildStorefrontConfig(config)),
-        },
-      ],
-    },
-  });
+    const shopId = data?.shop?.id;
+    if (!shopId) return { ok: false, error: "Loja não encontrada" };
 
-  const json = await response.json();
-  const errors = json.data?.metafieldsSet?.userErrors ?? [];
-  if (errors.length > 0) {
-    console.error("[metafield-sync]", errors);
-    return { ok: false, error: errors.map((e: { message: string }) => e.message).join(", ") };
+    const response = await admin.graphql(CREATE_METAFIELD, {
+      variables: {
+        metafields: [
+          {
+            ownerId: shopId,
+            namespace: "dreams_seo",
+            key: "config",
+            type: "json",
+            value: JSON.stringify(buildStorefrontConfig(config)),
+          },
+        ],
+      },
+    });
+
+    const json = await response.json();
+    const userErrors = json.data?.metafieldsSet?.userErrors ?? [];
+    if (userErrors.length > 0) {
+      console.error("[metafield-sync]", userErrors);
+      return {
+        ok: false,
+        error: userErrors.map((e: { message: string }) => e.message).join(", "),
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    console.error("[metafield-sync]", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Falha ao sincronizar vitrine",
+    };
   }
-
-  return { ok: true };
 }

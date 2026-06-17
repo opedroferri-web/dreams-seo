@@ -158,9 +158,6 @@ export const GET_FILES = `#graphql
               width
               height
             }
-            originalSource {
-              fileSize
-            }
           }
         }
       }
