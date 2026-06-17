@@ -6,6 +6,7 @@ import {
 } from "~/lib/optimization-presets";
 import {
   syncOptimizationToMetafield,
+  syncScriptsToMetafield,
   type StorefrontConfig,
 } from "~/services/metafield-sync.server";
 
@@ -79,6 +80,7 @@ export async function saveOptimizationSettings(
   if (admin) {
     try {
       await syncOptimizationToMetafield(admin, toStorefrontConfig(settings));
+      await syncScriptsToMetafield(admin, shop);
     } catch (error) {
       console.error("[saveOptimizationSettings] metafield sync failed", error);
     }

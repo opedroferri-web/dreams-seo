@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useFetcher, useLoaderData } from "@remix-run/react";
-import { useState, useCallback } from "react";
+import { useFetcher, useLoaderData, useRevalidator } from "@remix-run/react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Page,
   BlockStack,
@@ -23,6 +23,9 @@ import {
   Link,
   Grid,
   List,
+  Modal,
+  FormLayout,
+  TextField,
 } from "@shopify/polaris";
 import { CheckCircleIcon, ClockIcon } from "@shopify/polaris-icons";
 import { authenticate } from "~/shopify.server";
@@ -35,6 +38,7 @@ import {
   settingsToOptimization,
 } from "~/services/optimization-page.server";
 import { analyzeStorePerformance, emptyPerformanceReport } from "~/services/performance-analysis.server";
+import { syncScriptsToMetafield } from "~/services/metafield-sync.server";
 import {
   OPTIMIZATION_LEVELS,
   calculateOptimizationScore,
@@ -88,6 +92,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       : null,
   });
 };
+
+async function reloadScripts(shop: string) {
+  return prisma.managedScript.findMany({ where: { shop }, orderBy: { priority: "desc" } });
+}
+
+async function scriptActionResponse(
+  admin: Parameters<typeof syncScriptsToMetafield>[0],
+  shop: string,
+  message: string,
+) {
+  await syncScriptsToMetafield(admin, shop);
+  const scripts = await reloadScripts(shop);
+  return json({ success: true, message, scripts });
+}
 
 function parseSettings(formData: FormData): Partial<OptimizationSettings & { schemaInjection?: boolean }> {
   const trigger = (formData.get("delayJsTrigger") as string) || "scroll";
@@ -174,7 +192,32 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           data: { enabled: !script.enabled },
         });
       }
-      return json({ success: true, message: "Script atualizado." });
+      return scriptActionResponse(admin, shop, "Script atualizado.");
+    }
+
+    if (intent === "create_script") {
+      const name = (formData.get("name") as string)?.trim();
+      const content = (formData.get("content") as string)?.trim();
+      if (!name || !content) {
+        return json({ success: false, error: "Nome e conteúdo são obrigatórios." }, { status: 400 });
+      }
+      await prisma.managedScript.create({
+        data: {
+          shop,
+          name,
+          scriptType: (formData.get("scriptType") as string) || "javascript",
+          placement: (formData.get("placement") as string) || "head",
+          content,
+          displayRule: "all",
+        },
+      });
+      return scriptActionResponse(admin, shop, `Script "${name}" adicionado e sincronizado com a vitrine.`);
+    }
+
+    if (intent === "delete_script") {
+      const id = formData.get("id") as string;
+      await prisma.managedScript.delete({ where: { id } });
+      return scriptActionResponse(admin, shop, "Script removido.");
     }
 
     if (intent === "add_pixel") {
@@ -192,7 +235,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           },
         });
       }
-      return json({ success: true, message: `${template?.name ?? "Pixel"} adicionado.` });
+      return scriptActionResponse(admin, shop, `${template?.name ?? "Pixel"} adicionado.`);
     }
 
     const settings = await saveOptimizationSettings(shop, parseSettings(formData), admin);
@@ -219,40 +262,123 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 export default function Otimizacao() {
   const loaderData = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
+  const revalidator = useRevalidator();
   const [tab, setTab] = useState(0);
+  const [scriptModalOpen, setScriptModalOpen] = useState(false);
+  const [scriptForm, setScriptForm] = useState({
+    name: "",
+    scriptType: "javascript",
+    placement: "head",
+    content: "",
+  });
+  const [localSettings, setLocalSettings] = useState<{
+    optimization: OptimizationSettings;
+    schemaInjection: boolean;
+    score: number;
+    activeCount: number;
+    currentLevel: number;
+  } | null>(null);
+
   const isLoading = fetcher.state !== "idle";
 
-  const s = fetcher.data?.optimization ?? loaderData.optimization;
-  const schemaOn = fetcher.data?.schemaInjection ?? loaderData.schemaInjection;
-  const score = fetcher.data?.score ?? loaderData.score;
-  const activeCount = fetcher.data?.activeCount ?? loaderData.activeCount;
-  const currentLevel = fetcher.data?.currentLevel ?? loaderData.currentLevel;
-  const { performance, scripts, pagespeedUrl, lastRun } = loaderData;
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data?.success) {
+      revalidator.revalidate();
+      if (fetcher.data.optimization) {
+        setLocalSettings(null);
+      }
+    }
+  }, [fetcher.state, fetcher.data, revalidator]);
 
-  const delayTriggerValue = s.delayJsEnabled ? s.delayJsTrigger : "disabled";
+  useEffect(() => {
+    setLocalSettings(null);
+  }, [loaderData.optimization, loaderData.schemaInjection, loaderData.score]);
+
+  const base = localSettings ?? {
+    optimization: fetcher.data?.optimization ?? loaderData.optimization,
+    schemaInjection: fetcher.data?.schemaInjection ?? loaderData.schemaInjection,
+    score: fetcher.data?.score ?? loaderData.score,
+    activeCount: fetcher.data?.activeCount ?? loaderData.activeCount,
+    currentLevel: fetcher.data?.currentLevel ?? loaderData.currentLevel,
+  };
+
+  const s = base.optimization;
+  const schemaOn = base.schemaInjection;
+  const score = base.score;
+  const activeCount = base.activeCount;
+  const currentLevel = base.currentLevel;
+  const scripts = fetcher.data?.scripts ?? loaderData.scripts;
+  const { performance, pagespeedUrl, lastRun } = loaderData;
+
+  const pending = fetcher.formData;
+  const delayTriggerValue =
+    (pending?.get("delayJsTrigger") as string | null) ??
+    (s.delayJsEnabled ? s.delayJsTrigger : "disabled");
+  const cacheLevelValue =
+    (pending?.get("resourceHintsLevel") as string | null) ?? String(s.resourceHintsLevel);
+
+  const boolFromPending = (key: string, fallback: boolean) => {
+    const v = pending?.get(key);
+    return v != null ? v === "true" : fallback;
+  };
 
   const save = useCallback(
     (updates: Record<string, string | boolean>) => {
+      const merged = {
+        lazyLoadEnabled: updates.lazyLoadEnabled ?? s.lazyLoadEnabled,
+        delayJsEnabled: updates.delayJsEnabled ?? s.delayJsEnabled,
+        dnsPrefetchEnabled: updates.dnsPrefetchEnabled ?? s.dnsPrefetchEnabled,
+        preconnectEnabled: updates.preconnectEnabled ?? s.preconnectEnabled,
+        preloadEnabled: updates.preloadEnabled ?? s.preloadEnabled,
+        prefetchEnabled: updates.prefetchEnabled ?? s.prefetchEnabled,
+        fontOptimization: updates.fontOptimization ?? s.fontOptimization,
+        webpEnabled: updates.webpEnabled ?? s.webpEnabled ?? true,
+        resourceHintsLevel: updates.resourceHintsLevel != null
+          ? parseInt(String(updates.resourceHintsLevel))
+          : s.resourceHintsLevel,
+        delayJsTrigger: updates.delayJsTrigger ?? (s.delayJsEnabled ? s.delayJsTrigger : "disabled"),
+        schemaInjection: updates.schemaInjection ?? schemaOn,
+      };
+
+      setLocalSettings({
+        optimization: {
+          ...s,
+          lazyLoadEnabled: Boolean(merged.lazyLoadEnabled),
+          delayJsEnabled: Boolean(merged.delayJsEnabled),
+          dnsPrefetchEnabled: Boolean(merged.dnsPrefetchEnabled),
+          preconnectEnabled: Boolean(merged.preconnectEnabled),
+          preloadEnabled: Boolean(merged.preloadEnabled),
+          prefetchEnabled: Boolean(merged.prefetchEnabled),
+          fontOptimization: Boolean(merged.fontOptimization),
+          webpEnabled: Boolean(merged.webpEnabled),
+          resourceHintsLevel: merged.resourceHintsLevel as OptimizationSettings["resourceHintsLevel"],
+          delayJsTrigger: merged.delayJsTrigger as OptimizationSettings["delayJsTrigger"],
+        },
+        schemaInjection: Boolean(merged.schemaInjection),
+        score: base.score,
+        activeCount: base.activeCount,
+        currentLevel: base.currentLevel,
+      });
+
       fetcher.submit(
         {
           intent: "save",
-          lazyLoadEnabled: String(s.lazyLoadEnabled),
-          delayJsEnabled: String(s.delayJsEnabled),
-          dnsPrefetchEnabled: String(s.dnsPrefetchEnabled),
-          preconnectEnabled: String(s.preconnectEnabled),
-          preloadEnabled: String(s.preloadEnabled),
-          prefetchEnabled: String(s.prefetchEnabled),
-          fontOptimization: String(s.fontOptimization),
-          webpEnabled: String(s.webpEnabled ?? true),
-          resourceHintsLevel: String(s.resourceHintsLevel),
-          delayJsTrigger: delayTriggerValue,
-          schemaInjection: String(schemaOn),
-          ...updates,
+          lazyLoadEnabled: String(merged.lazyLoadEnabled),
+          delayJsEnabled: String(merged.delayJsEnabled),
+          dnsPrefetchEnabled: String(merged.dnsPrefetchEnabled),
+          preconnectEnabled: String(merged.preconnectEnabled),
+          preloadEnabled: String(merged.preloadEnabled),
+          prefetchEnabled: String(merged.prefetchEnabled),
+          fontOptimization: String(merged.fontOptimization),
+          webpEnabled: String(merged.webpEnabled),
+          resourceHintsLevel: String(merged.resourceHintsLevel),
+          delayJsTrigger: String(merged.delayJsTrigger),
+          schemaInjection: String(merged.schemaInjection),
         },
         { method: "POST" },
       );
     },
-    [fetcher, s, schemaOn, delayTriggerValue],
+    [fetcher, s, schemaOn, base.score, base.activeCount, base.currentLevel],
   );
 
   const scoreTone = score >= 80 ? "success" : score >= 50 ? "highlight" : "critical";
@@ -273,19 +399,33 @@ export default function Otimizacao() {
     img.needsWebp ? <Badge tone="warning">Converter WebP</Badge> : <Badge tone="success">OK</Badge>,
   ]);
 
+  const placementLabels: Record<string, string> = {
+    head: "Header (<head>)",
+    body_start: "Início do body",
+    body_end: "Final do body",
+  };
+
   const scriptRows = scripts.map((sc) => [
     sc.name,
-    sc.placement,
+    placementLabels[sc.placement] ?? sc.placement,
     <Badge key={sc.id} tone={sc.enabled ? "success" : "critical"}>
       {sc.enabled ? "Ativo" : "Inativo"}
     </Badge>,
-    <Button
-      key={`t-${sc.id}`}
-      size="slim"
-      onClick={() => fetcher.submit({ intent: "toggle_script", id: sc.id }, { method: "POST" })}
-    >
-      {sc.enabled ? "Desativar" : "Ativar"}
-    </Button>,
+    <InlineStack key={`a-${sc.id}`} gap="200">
+      <Button
+        size="slim"
+        onClick={() => fetcher.submit({ intent: "toggle_script", id: sc.id }, { method: "POST" })}
+      >
+        {sc.enabled ? "Desativar" : "Ativar"}
+      </Button>
+      <Button
+        size="slim"
+        tone="critical"
+        onClick={() => fetcher.submit({ intent: "delete_script", id: sc.id }, { method: "POST" })}
+      >
+        Excluir
+      </Button>
+    </InlineStack>,
   ]);
 
   const tabs = [
@@ -449,13 +589,13 @@ export default function Otimizacao() {
                         <Select
                           label="Nível de cache"
                           options={cacheLevels}
-                          value={String(s.resourceHintsLevel)}
+                          value={cacheLevelValue}
                           onChange={(v) => save({ resourceHintsLevel: v === "0" ? "0" : v, dnsPrefetchEnabled: v !== "0", preconnectEnabled: v !== "0" })}
                         />
-                        <Checkbox label="DNS Prefetch" checked={s.dnsPrefetchEnabled} onChange={(v) => save({ dnsPrefetchEnabled: v })} />
-                        <Checkbox label="Preconnect" checked={s.preconnectEnabled} onChange={(v) => save({ preconnectEnabled: v })} />
-                        <Checkbox label="Preload imagens críticas" checked={s.preloadEnabled} onChange={(v) => save({ preloadEnabled: v })} />
-                        <Checkbox label="Prefetch de páginas" checked={s.prefetchEnabled} onChange={(v) => save({ prefetchEnabled: v })} />
+                        <Checkbox label="DNS Prefetch" checked={boolFromPending("dnsPrefetchEnabled", s.dnsPrefetchEnabled)} onChange={(v) => save({ dnsPrefetchEnabled: v })} />
+                        <Checkbox label="Preconnect" checked={boolFromPending("preconnectEnabled", s.preconnectEnabled)} onChange={(v) => save({ preconnectEnabled: v })} />
+                        <Checkbox label="Preload imagens críticas" checked={boolFromPending("preloadEnabled", s.preloadEnabled)} onChange={(v) => save({ preloadEnabled: v })} />
+                        <Checkbox label="Prefetch de páginas" checked={boolFromPending("prefetchEnabled", s.prefetchEnabled)} onChange={(v) => save({ prefetchEnabled: v })} />
                       </BlockStack>
                     </Card>
                   </Layout.Section>
@@ -464,9 +604,9 @@ export default function Otimizacao() {
                       <Card>
                         <BlockStack gap="300">
                           <Text as="h3" variant="headingMd">Imagens e fontes</Text>
-                          <Checkbox label="Lazy load" checked={s.lazyLoadEnabled} onChange={(v) => save({ lazyLoadEnabled: v })} />
-                          <Checkbox label="WebP automático (CDN Shopify)" checked={s.webpEnabled ?? true} onChange={(v) => save({ webpEnabled: v })} />
-                          <Checkbox label="Otimização de fontes" checked={s.fontOptimization} onChange={(v) => save({ fontOptimization: v })} />
+                          <Checkbox label="Lazy load" checked={boolFromPending("lazyLoadEnabled", s.lazyLoadEnabled)} onChange={(v) => save({ lazyLoadEnabled: v })} />
+                          <Checkbox label="WebP automático (CDN Shopify)" checked={boolFromPending("webpEnabled", s.webpEnabled ?? true)} onChange={(v) => save({ webpEnabled: v })} />
+                          <Checkbox label="Otimização de fontes" checked={boolFromPending("fontOptimization", s.fontOptimization)} onChange={(v) => save({ fontOptimization: v })} />
                         </BlockStack>
                       </Card>
                       <Card>
@@ -491,7 +631,7 @@ export default function Otimizacao() {
                       <Card>
                         <BlockStack gap="300">
                           <Text as="h3" variant="headingMd">SEO na vitrine</Text>
-                          <Checkbox label="Schema JSON-LD" checked={schemaOn} onChange={(v) => save({ schemaInjection: v })} />
+                          <Checkbox label="Schema JSON-LD" checked={boolFromPending("schemaInjection", schemaOn)} onChange={(v) => save({ schemaInjection: v })} />
                         </BlockStack>
                       </Card>
                     </BlockStack>
@@ -533,7 +673,15 @@ export default function Otimizacao() {
           {tab === 3 && (
             <Box paddingBlockStart="400">
               <BlockStack gap="400">
-                <Text as="h3" variant="headingMd">Pixels e scripts</Text>
+                <InlineStack align="space-between" blockAlign="center">
+                  <Text as="h3" variant="headingMd">Scripts e pixels</Text>
+                  <Button variant="primary" onClick={() => setScriptModalOpen(true)}>
+                    + Novo script
+                  </Button>
+                </InlineStack>
+                <Text as="p" tone="subdued">
+                  Cole HTML, JavaScript ou tags de rastreamento. Scripts no header entram no &lt;head&gt; da loja.
+                </Text>
                 <InlineStack gap="200" wrap>
                   {(Object.keys(PIXEL_TEMPLATES) as PixelTemplateKey[]).map((key) => (
                     <Button key={key} size="slim"
@@ -546,11 +694,11 @@ export default function Otimizacao() {
                   {scriptRows.length > 0 ? (
                     <DataTable
                       columnContentTypes={["text", "text", "text", "text"]}
-                      headings={["Nome", "Posição", "Status", "Ação"]}
+                      headings={["Nome", "Posição", "Status", "Ações"]}
                       rows={scriptRows}
                     />
                   ) : (
-                    <Text as="p" tone="subdued">Nenhum script gerenciado. Adicione um pixel acima.</Text>
+                    <Text as="p" tone="subdued">Nenhum script ainda. Clique em &quot;Novo script&quot; ou adicione um pixel acima.</Text>
                   )}
                 </Card>
               </BlockStack>
@@ -563,6 +711,65 @@ export default function Otimizacao() {
           As configs do app sincronizam automaticamente com a vitrine.
         </Banner>
       </BlockStack>
+
+      <Modal
+        open={scriptModalOpen}
+        onClose={() => setScriptModalOpen(false)}
+        title="Novo script"
+        primaryAction={{
+          content: "Salvar na vitrine",
+          loading: isLoading && fetcher.formData?.get("intent") === "create_script",
+          onAction: () => {
+            fetcher.submit(
+              { intent: "create_script", ...scriptForm },
+              { method: "POST" },
+            );
+            setScriptModalOpen(false);
+            setScriptForm({ name: "", scriptType: "javascript", placement: "head", content: "" });
+          },
+        }}
+        secondaryActions={[{ content: "Cancelar", onAction: () => setScriptModalOpen(false) }]}
+      >
+        <Modal.Section>
+          <FormLayout>
+            <TextField
+              label="Nome"
+              value={scriptForm.name}
+              onChange={(v) => setScriptForm({ ...scriptForm, name: v })}
+              autoComplete="off"
+              placeholder="Ex: Google Tag Manager"
+            />
+            <Select
+              label="Posição"
+              options={[
+                { label: "Header (<head>)", value: "head" },
+                { label: "Início do body", value: "body_start" },
+                { label: "Final do body", value: "body_end" },
+              ]}
+              value={scriptForm.placement}
+              onChange={(v) => setScriptForm({ ...scriptForm, placement: v })}
+            />
+            <Select
+              label="Tipo"
+              options={[
+                { label: "JavaScript", value: "javascript" },
+                { label: "HTML", value: "html" },
+                { label: "Pixel", value: "pixel" },
+              ]}
+              value={scriptForm.scriptType}
+              onChange={(v) => setScriptForm({ ...scriptForm, scriptType: v })}
+            />
+            <TextField
+              label="Conteúdo do script"
+              value={scriptForm.content}
+              onChange={(v) => setScriptForm({ ...scriptForm, content: v })}
+              multiline={8}
+              autoComplete="off"
+              helpText='Ex: <script>...</script> ou código JS completo'
+            />
+          </FormLayout>
+        </Modal.Section>
+      </Modal>
     </Page>
   );
 }

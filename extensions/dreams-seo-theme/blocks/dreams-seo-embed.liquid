@@ -118,10 +118,64 @@
 {% if ds_lazy %}
   <script defer>
     document.addEventListener('DOMContentLoaded', function() {
-      document.querySelectorAll('img:not([loading])').forEach(function(img) {
-        img.loading = 'lazy';
-        img.decoding = 'async';
+      var margin = {% if cfg != blank and cfg.lazy_load_margin != nil %}{{ cfg.lazy_load_margin }}{% else %}900{% endif %};
+      var viewportH = window.innerHeight || 800;
+      var foldLimit = viewportH * 1.15;
+
+      function loadMedia(el) {
+        if (el.dataset.dreamsLoaded) return;
+        el.dataset.dreamsLoaded = '1';
+        if (el.dataset.src) {
+          if (el.tagName === 'IMG') el.src = el.dataset.src;
+          else if (el.tagName === 'VIDEO') { el.src = el.dataset.src; el.load(); }
+          else if (el.tagName === 'IFRAME') el.src = el.dataset.src;
+        }
+        if (el.tagName === 'VIDEO' && !el.src) el.preload = 'auto';
+        if (el.tagName === 'VIDEO') {
+          el.preload = el.preload || 'auto';
+          if (typeof el.load === 'function') el.load();
+        }
+        if (el.tagName === 'IMG') { el.loading = 'eager'; el.decoding = 'async'; }
+      }
+
+      var belowFold = [];
+      document.querySelectorAll('img, video, iframe').forEach(function(el) {
+        var rect = el.getBoundingClientRect();
+        var isAboveFold = rect.top < foldLimit;
+        if (isAboveFold) {
+          if (el.tagName === 'IMG') {
+            el.loading = 'eager';
+            if (el.fetchPriority !== undefined) el.fetchPriority = 'high';
+          }
+          if (el.tagName === 'VIDEO') el.preload = 'metadata';
+        } else {
+          if (el.tagName === 'IMG') el.loading = 'lazy';
+          el.decoding = 'async';
+          belowFold.push(el);
+        }
       });
+
+      if ('IntersectionObserver' in window && belowFold.length) {
+        var observer = new IntersectionObserver(function(entries) {
+          entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+              loadMedia(entry.target);
+              observer.unobserve(entry.target);
+            }
+          });
+        }, { rootMargin: margin + 'px 0px', threshold: 0.01 });
+        belowFold.forEach(function(el) { observer.observe(el); });
+      }
+
+      setTimeout(function() {
+        belowFold.forEach(function(el) { loadMedia(el); });
+      }, 2000);
+
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(function() {
+          belowFold.forEach(function(el) { loadMedia(el); });
+        }, { timeout: 3500 });
+      }
     });
   </script>
 {% endif %}
@@ -170,6 +224,48 @@
       }
       setTimeout(loadDelayedScripts, 8000);
     })();
+  </script>
+{% endif %}
+
+{% assign ds_scripts = shop.metafields.dreams_seo.scripts.value %}
+{% if ds_scripts != blank %}
+  {% for item in ds_scripts %}
+    {% if item.enabled and item.placement == 'head' %}
+      {{ item.content }}
+    {% endif %}
+  {% endfor %}
+  <script defer>
+    document.addEventListener('DOMContentLoaded', function() {
+      var scripts = {{ ds_scripts | json }};
+      if (!Array.isArray(scripts)) return;
+      scripts.forEach(function(item) {
+        if (!item.enabled || item.placement === 'head') return;
+        var container = document.createElement('div');
+        container.innerHTML = item.content;
+        var nodes = container.childNodes;
+        for (var i = 0; i < nodes.length; i++) {
+          var node = nodes[i];
+          if (node.nodeName === 'SCRIPT') {
+            var s = document.createElement('script');
+            if (node.src) s.src = node.src;
+            if (node.type) s.type = node.type;
+            if (node.textContent) s.textContent = node.textContent;
+            s.async = true;
+            if (item.placement === 'body_start') {
+              document.body.insertBefore(s, document.body.firstChild);
+            } else {
+              document.body.appendChild(s);
+            }
+          } else if (node.nodeType === 1) {
+            if (item.placement === 'body_start') {
+              document.body.insertBefore(node, document.body.firstChild);
+            } else {
+              document.body.appendChild(node);
+            }
+          }
+        }
+      });
+    });
   </script>
 {% endif %}
 
