@@ -126,7 +126,7 @@ export const GET_BLOGS_SEO = `#graphql
                 title
                 handle
                 summary
-                contentHtml
+                body
                 image {
                   altText
                   url

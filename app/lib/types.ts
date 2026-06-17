@@ -42,7 +42,7 @@ export interface ArticleNode {
   title: string;
   handle: string;
   summary?: string;
-  contentHtml?: string;
+  body?: string;
   image?: { altText?: string | null };
 }
 

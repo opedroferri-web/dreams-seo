@@ -225,7 +225,7 @@ export function auditPage(page: PageNode): AuditIssueInput[] {
 
 export function auditArticle(article: ArticleNode): AuditIssueInput[] {
   const issues: AuditIssueInput[] = [];
-  const content = stripHtml(article.contentHtml || "");
+  const content = stripHtml(article.body || article.summary || "");
 
   if (!article.summary && content.length < 200) {
     issues.push({
@@ -238,7 +238,8 @@ export function auditArticle(article: ArticleNode): AuditIssueInput[] {
     });
   }
 
-  const hasHeadings = (article.contentHtml || "").match(/<h[2-4]/gi);
+  const bodyHtml = article.body || "";
+  const hasHeadings = bodyHtml.match(/<h[2-4]/gi);
   if (!hasHeadings) {
     issues.push({
       resourceType: "article",
@@ -250,7 +251,7 @@ export function auditArticle(article: ArticleNode): AuditIssueInput[] {
     });
   }
 
-  const internalLinks = (article.contentHtml || "").match(/href=["']\/[^"']+/gi);
+  const internalLinks = bodyHtml.match(/href=["']\/[^"']+/gi);
   if (!internalLinks || internalLinks.length < 1) {
     issues.push({
       resourceType: "article",
