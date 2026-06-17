@@ -1,0 +1,25 @@
+{
+  "name": "dreams-seo",
+  "services": [
+    {
+      "name": "app",
+      "source": {
+        "type": "github",
+        "owner": "opedroferri-web",
+        "repo": "dreams-seo",
+        "branch": "main",
+        "dockerfile": "Dockerfile"
+      },
+      "domains": ["seo.dreamsnutrition.com.br"],
+      "ports": [3000],
+      "mounts": [
+        {
+          "type": "volume",
+          "hostPath": "dreams-seo-data",
+          "mountPath": "/app/prisma/data"
+        }
+      ],
+      "envFile": "easypanel.env.example"
+    }
+  ]
+}

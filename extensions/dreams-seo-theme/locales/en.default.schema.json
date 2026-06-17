@@ -1,0 +1,24 @@
+{
+  "blocks": {
+    "dreams_seo_embed": {
+      "name": "Dreams SEO Pro",
+      "settings": {
+        "lazy_load_enabled": {
+          "label": "Lazy Load"
+        },
+        "delay_js_enabled": {
+          "label": "Delay JavaScript"
+        },
+        "resource_hints_level": {
+          "label": "Resource Hints Level"
+        },
+        "schema_enabled": {
+          "label": "Schema Injection"
+        },
+        "font_optimization": {
+          "label": "Font Optimization"
+        }
+      }
+    }
+  }
+}

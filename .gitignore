@@ -1,0 +1,15 @@
+node_modules
+/build
+/public/build
+.env
+.env.*
+!.env.example
+!easypanel.env.example
+*.sqlite
+*.sqlite-journal
+prisma/dev.sqlite
+prisma/data
+.cache
+.DS_Store
+/dist
+.shopify

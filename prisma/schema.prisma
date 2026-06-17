@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+model ShopSettings {
+  id                    String   @id @default(cuid())
+  shop                  String   @unique
+  lazyLoadEnabled       Boolean  @default(true)
+  delayJsEnabled        Boolean  @default(false)
+  dnsPrefetchEnabled    Boolean  @default(true)
+  preconnectEnabled     Boolean  @default(true)
+  preloadEnabled        Boolean  @default(false)
+  prefetchEnabled       Boolean  @default(false)
+  fontOptimization      Boolean  @default(true)
+  schemaInjection       Boolean  @default(true)
+  scriptManagerEnabled  Boolean  @default(true)
+  redirectManagerEnabled Boolean @default(true)
+  resourceHintsLevel    Int      @default(1)
+  delayJsTrigger        String   @default("scroll")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model AuditSnapshot {
+  id                  String   @id @default(cuid())
+  shop                String
+  seoScore            Int      @default(0)
+  performanceScore    Int      @default(0)
+  technicalScore      Int      @default(0)
+  optimizationScore   Int      @default(0)
+  productsWithoutSeo  Int      @default(0)
+  imagesWithoutAlt    Int      @default(0)
+  missingMetaDesc     Int      @default(0)
+  missingSchemas      Int      @default(0)
+  brokenLinks         Int      @default(0)
+  activeScripts       Int      @default(0)
+  estimatedPageWeight Int      @default(0)
+  totalOptimizations  Int      @default(0)
+  rawData             String?
+  createdAt           DateTime @default(now())
+
+  @@index([shop, createdAt])
+}
+
+model AuditIssue {
+  id          String   @id @default(cuid())
+  shop        String
+  resourceType String
+  resourceId  String?
+  resourceTitle String?
+  issueType   String
+  severity    String   @default("medium")
+  message     String
+  suggestion  String?
+  fixed       Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([shop, resourceType, issueType])
+  @@index([shop, fixed])
+}
+
+model ManagedScript {
+  id          String   @id @default(cuid())
+  shop        String
+  name        String
+  scriptType  String   @default("javascript")
+  placement   String   @default("body_end")
+  content     String
+  enabled     Boolean  @default(true)
+  displayRule String   @default("all")
+  includeUrls String?
+  excludeUrls String?
+  priority    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([shop, enabled])
+}
+
+model Redirect {
+  id        String   @id @default(cuid())
+  shop      String
+  fromPath  String
+  toPath    String
+  type      Int      @default(301)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shop, fromPath])
+  @@index([shop])
+}
+
+model BrokenLink {
+  id           String   @id @default(cuid())
+  shop         String
+  sourceType   String
+  sourceId     String?
+  sourceUrl    String
+  targetUrl    String
+  statusCode   Int?
+  linkType     String   @default("internal")
+  fixed        Boolean  @default(false)
+  lastChecked  DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([shop, fixed])
+}
+
+model OptimizationLog {
+  id        String   @id @default(cuid())
+  shop      String
+  action    String
+  resourceType String?
+  resourceId String?
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([shop, createdAt])
+}
+
+model SchemaConfig {
+  id        String   @id @default(cuid())
+  shop      String
+  schemaType String
+  enabled   Boolean  @default(false)
+  config    String?
+  status    String   @default("absent")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shop, schemaType])
+}

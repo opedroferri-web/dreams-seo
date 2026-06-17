@@ -1,0 +1,29 @@
+api_version = "2025-01"
+uid = "dreams-seo-pixel-001"
+type = "web_pixel_extension"
+name = "Dreams SEO Pro Pixel"
+handle = "dreams-seo-pixel"
+runtime_context = "strict"
+
+[settings]
+type = "object"
+
+[settings.fields.accountID]
+name = "Account ID"
+description = "ID da conta para tracking de eventos"
+type = "single_line_text_field"
+
+[settings.fields.enableMetaPixel]
+name = "Meta Pixel Events"
+description = "Enviar eventos Meta Pixel (true ou false)"
+type = "single_line_text_field"
+
+[settings.fields.enableGA4]
+name = "GA4 Events"
+description = "Enviar eventos GA4 (true ou false)"
+type = "single_line_text_field"
+
+[settings.fields.enableTikTok]
+name = "TikTok Pixel Events"
+description = "Enviar eventos TikTok (true ou false)"
+type = "single_line_text_field"
